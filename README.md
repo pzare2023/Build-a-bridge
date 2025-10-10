@@ -7,6 +7,7 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
 1. Install dependencies
 
    ```bash
+   npm i -g expo-cli
    npm install
    ```
 
