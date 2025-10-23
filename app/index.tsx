@@ -40,7 +40,7 @@ const styles = StyleSheet.create({
     padding: 24,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#0B0F14",
+    backgroundColor: "#fbfbfbff",
   },
   title: {
     color: "white",
@@ -55,7 +55,7 @@ const styles = StyleSheet.create({
     maxWidth: 360,
   },
   button: {
-    backgroundColor: "#2F86EB",
+    backgroundColor: "#8e2a2aff",
     borderRadius: 14,
     paddingVertical: 14,
     paddingHorizontal: 16,
