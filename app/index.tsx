@@ -43,7 +43,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#fbfbfbff",
   },
   title: {
-    color: "white",
+    color: "#282828ff",
     fontSize: 24,
     fontWeight: "700",
     marginBottom: 24,
