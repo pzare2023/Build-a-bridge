@@ -8,6 +8,11 @@ const Gtfs = require("gtfs-realtime-bindings");
 const app = express();
 const PORT = process.env.PORT || 8080;
 
+const cors = require("cors");
+app.use(cors());
+app.get("/", (_req, res) => res.send("TTC RT proxy OK. Use /alerts"));
+
+
 // ✅ Point this to the TTC alerts endpoint you found.
 // If they give you mode-specific URLs, put one of those here.
 // For debug you can add ?format=text in curl, but keep binary for the server.
