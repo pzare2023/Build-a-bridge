@@ -1,8 +1,8 @@
-import React, { useEffect, useState, useCallback } from "react";
-import { Text, View, StyleSheet, FlatList, RefreshControl, ActivityIndicator } from "react-native";
+import React, { useCallback, useEffect, useState } from "react";
+import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from "react-native";
 
 // ⬇️ Replace this with your public Codespaces/Ngrok URL, including /alerts
-const ALERTS_URL = "https://ectatic-cecil-abstemiously.ngrok-free.dev/alerts";
+const ALERTS_URL = "https://ectatic-cecil-abstemiously.ngrok-free.dev/alerts/subway";
 
 
 
@@ -56,7 +56,6 @@ export default function Updates() {
 
   const renderItem = ({ item }: { item: AlertItem }) => (
     <View style={styles.card}>
-      <Text style={styles.cardTitle}>{item.title}</Text>
       <Text style={styles.cardDescription}>{item.description}</Text>
     </View>
   );

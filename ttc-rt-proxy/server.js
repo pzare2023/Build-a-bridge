@@ -22,7 +22,7 @@ function firstText(ts) {
   return ts?.translation?.[0]?.text || "";
 }
 
-app.get("/alerts", async (_req, res) => {
+app.get("/alerts/subway", async (_req, res) => {
   try {
     const resp = await fetch(ALERTS_URL, {
       headers: { Accept: "application/octet-stream" },
