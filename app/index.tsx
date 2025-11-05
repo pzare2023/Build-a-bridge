@@ -55,7 +55,7 @@ const styles = StyleSheet.create({
     maxWidth: 360,
   },
   button: {
-    backgroundColor: "#8e2a2aff",
+    backgroundColor: "#9f2828ff",
     borderRadius: 14,
     paddingVertical: 14,
     paddingHorizontal: 16,
