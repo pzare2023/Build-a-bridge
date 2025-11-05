@@ -21,33 +21,51 @@ type ChatMsg = {
   createdAt: number;
 };
 
+// --- API base (module scope): use .env or temporarily hardcode for testing
+const rawUrl = process.env.EXPO_PUBLIC_API_URL as string | undefined;
+// const rawUrl = "https://<your-codespace>-3000.app.github.dev"; // <— use this line temporarily if needed
+const API_URL = rawUrl ? rawUrl.replace(/\/+$/, "") : "";
+
+// --- initial messages (module scope)
 const initialMessages: ChatMsg[] = [
   {
     id: "welcome",
     role: "assistant",
-    text:
-      "Hi! Ask me anything. (AI not wired yet—this is a static starter.)",
+    text: "Hi! Ask me anything. (Connected to server—try a question.)",
     createdAt: Date.now(),
   },
 ];
 
 export default function AskScreen() {
   const insets = useSafeAreaInsets();
+
+  // state
   const [messages, setMessages] = useState<ChatMsg[]>(initialMessages);
   const [input, setInput] = useState("");
   const listRef = useRef<FlatList<ChatMsg>>(null);
 
-  const scrollToEnd = useCallback(() => {
-    requestAnimationFrame(() =>
-      listRef.current?.scrollToEnd({ animated: true })
-    );
+  // tiny connection banner
+  const [conn, setConn] = useState<"checking" | "ok" | "fail">("checking");
+  useEffect(() => {
+    (async () => {
+      try {
+        if (!API_URL) throw new Error("no API_URL");
+        const r = await fetch(`${API_URL}/health`);
+        setConn(r.ok ? "ok" : "fail");
+      } catch {
+        setConn("fail");
+      }
+    })();
   }, []);
 
-  useEffect(() => {
-    scrollToEnd();
-  }, [messages, scrollToEnd]);
+  // autoscroll
+  const scrollToEnd = useCallback(() => {
+    requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
+  }, []);
+  useEffect(() => { scrollToEnd(); }, [messages, scrollToEnd]);
 
-  const onSend = useCallback(() => {
+  // send
+  const onSend = useCallback(async () => {
     const trimmed = input.trim();
     if (!trimmed) return;
 
@@ -60,37 +78,41 @@ export default function AskScreen() {
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
 
-    // Mock assistant reply for now
-    setTimeout(() => {
+    try {
+      if (!API_URL) throw new Error("Missing EXPO_PUBLIC_API_URL (restart Expo after setting .env)");
+
+      const r = await fetch(`${API_URL}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: trimmed }),
+      });
+
+      const raw = await r.text(); // helpful for debugging
+      if (!r.ok) throw new Error(`HTTP ${r.status}: ${raw}`);
+
+      const data = JSON.parse(raw);
       const bot: ChatMsg = {
         id: `${Date.now()}-bot`,
         role: "assistant",
-        text: "(Mock) Got it. I’ll answer once AI is connected.",
+        text: data.reply || "Sorry, no reply.",
         createdAt: Date.now(),
       };
       setMessages((prev) => [...prev, bot]);
-    }, 400);
+    } catch (e: any) {
+      const bot: ChatMsg = {
+        id: `${Date.now()}-bot`,
+        role: "assistant",
+        text: `Network/server error: ${e?.message || "unknown"}`,
+        createdAt: Date.now(),
+      };
+      setMessages((prev) => [...prev, bot]);
+    }
   }, [input]);
 
   const renderItem = ({ item }: { item: ChatMsg }) => (
-    <View
-      style={[
-        styles.row,
-        item.role === "user" ? styles.right : styles.left,
-      ]}
-    >
-      <View
-        style={[
-          styles.bubble,
-          item.role === "user" ? styles.userBubble : styles.botBubble,
-        ]}
-      >
-        <Text
-          style={[
-            styles.text,
-            item.role === "user" ? styles.userText : styles.botText,
-          ]}
-        >
+    <View style={[styles.row, item.role === "user" ? styles.right : styles.left]}>
+      <View style={[styles.bubble, item.role === "user" ? styles.userBubble : styles.botBubble]}>
+        <Text style={[styles.text, item.role === "user" ? styles.userText : styles.botText]}>
           {item.text}
         </Text>
       </View>
@@ -105,6 +127,14 @@ export default function AskScreen() {
         style={styles.flex}
         keyboardVerticalOffset={80 + insets.top}
       >
+        {conn !== "ok" && (
+          <View style={{ padding: 8, backgroundColor: "#402", margin: 8, borderRadius: 8 }}>
+            <Text style={{ color: "#fff" }}>
+              {conn === "checking" ? "Checking server..." : "Cannot reach server. Check EXPO_PUBLIC_API_URL."}
+            </Text>
+          </View>
+        )}
+
         <FlatList
           ref={listRef}
           data={messages}
@@ -127,10 +157,7 @@ export default function AskScreen() {
           <TouchableOpacity
             accessibilityLabel="Send message"
             onPress={onSend}
-            style={[
-              styles.sendBtn,
-              !input.trim() && styles.sendBtnDisabled,
-            ]}
+            style={[styles.sendBtn, !input.trim() && styles.sendBtnDisabled]}
             disabled={!input.trim()}
           >
             <Ionicons name="send" size={18} color="#fff" />
