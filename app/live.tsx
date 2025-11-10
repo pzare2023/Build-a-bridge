@@ -1,7 +1,8 @@
 import { useRef, useState } from "react";
 import { ActivityIndicator, Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
-const TRANSCRIBE_URL = "https://your-vercel-app.vercel.app/api/transcribe";
+const TRANSCRIBE_URL =
+  "https://speech-server-hrttqx8du-sanyas-projects-75066e62.vercel.app/api/transcribe";
 
 export default function Live() {
   const [transcript, setTranscript] = useState("");
