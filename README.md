@@ -12,6 +12,8 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
 
    npm i -g expo-cli
    npm install
+
+   npm install gtfs-realtime-bindings @protobufjs/aspromise
    ```
 
 2. Start the app
@@ -19,6 +21,10 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
    ```bash
    npx expo start --tunnel
    ```
+
+3. install groq package 
+
+npm install cors express dotenv
 
 In the output, you'll find options to open the app in a
 
