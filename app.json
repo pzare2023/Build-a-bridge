@@ -12,7 +12,8 @@
       "supportsTablet": true,
       "infoPlist": {
         "NSMicrophoneUsageDescription": "This app uses the microphone to transcribe live announcements.",
-        "NSSpeechRecognitionUsageDescription": "This app uses speech recognition to transcribe your voice into text."
+        "NSSpeechRecognitionUsageDescription": "This app uses speech recognition to transcribe your voice into text.",
+        "ITSAppUsesNonExemptEncryption": false
       },
       "bundleIdentifier": "com.anonymous.ttccompanion"
     },
@@ -55,6 +56,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "e27747dc-da62-4d34-bb16-f5b088b5532c"
+      }
     }
   }
 }
