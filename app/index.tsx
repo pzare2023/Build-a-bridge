@@ -1,72 +1,80 @@
-import { Text, View, Pressable, StyleSheet } from "react-native";
-import { router } from "expo-router";
-
+// app/index.tsx  -> FIRST PAGE (Announcer / Passenger)
+import React from "react";
+import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { useRouter } from "expo-router";
+import { useUserRole } from "../context/UserRoleContext";
 
 export default function Index() {
-  return (
-    <View style={styles.container} accessible accessibilityLabel="Home screen">
-      <Text style={styles.title}>Transit Companion</Text>
-      <View style={styles.buttons}>
-        <AppButton title="Ask the Chatbot" onPress={() => router.push("/ask")} />
-        <AppButton title="Updates Dashboard" onPress={() => router.push("/updates")} />
-        <AppButton title="Live Announcements" onPress={() => router.push("/live")} />
-      </View>
-    </View>
-  );
-}
+  const router = useRouter();
+  const { setRole } = useUserRole();
 
-function AppButton({
-  title,
-  onPress,
-}: {
-  title: string;
-  onPress: () => void;
-}) {
+  const handleAnnouncer = () => {
+    setRole("announcer");
+    router.replace("/home"); // go to menu screen
+  };
+
+  const handlePassenger = () => {
+    setRole("passenger");
+    router.replace("/home"); // same menu, but Live behaves differently
+  };
+
   return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={title}
-      style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
-    >
-      <Text style={styles.buttonText}>{title}</Text>
-    </Pressable>
+    <View style={styles.container}>
+      <Text style={styles.title}>Multilingual Transit Companion</Text>
+      <Text style={styles.subtitle}>Choose how you want to use the app</Text>
+
+      <TouchableOpacity style={styles.primaryButton} onPress={handleAnnouncer}>
+        <Text style={styles.buttonText}>Announcer</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={styles.secondaryButton} onPress={handlePassenger}>
+        <Text style={styles.buttonText}>Passenger</Text>
+      </TouchableOpacity>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 24,
-    alignItems: "center",
+    paddingHorizontal: 24,
     justifyContent: "center",
-    backgroundColor: "#fbfbfbff",
+    alignItems: "stretch",
+    backgroundColor: "#f8f8f9ff",
   },
   title: {
-    color: "#282828ff",
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: "700",
-    marginBottom: 24,
+    color: "#050505ff",
     textAlign: "center",
+    marginBottom: 8,
   },
-  buttons: {
-    width: "100%",
-    gap: 12, 
-    maxWidth: 360,
+  subtitle: {
+    fontSize: 16,
+    color: "#9ca3af",
+    textAlign: "center",
+    marginBottom: 32,
   },
-  button: {
+  primaryButton: {
     backgroundColor: "#9f2828ff",
     borderRadius: 14,
     paddingVertical: 14,
     paddingHorizontal: 16,
     alignItems: "center",
+    marginBottom: 16
   },
-  buttonPressed: {
-    opacity: 0.9,
+  secondaryButton: {
+    backgroundColor: "#9f2828ff",
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    alignItems: "center",
+
   },
   buttonText: {
-    color: "white",
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: "600",
+    color: "#f9fafb",
+    textAlign: "center",
   },
 });
