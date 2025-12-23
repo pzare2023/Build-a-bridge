@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { Stack } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useTheme } from "../context/ThemeContext";
 
 type ChatMsg = {
   id: string;
@@ -23,7 +24,6 @@ type ChatMsg = {
 
 // --- API base (module scope): use .env or temporarily hardcode for testing
 const rawUrl = process.env.EXPO_PUBLIC_API_URL as string | undefined;
-// const rawUrl = "https://<your-codespace>-3000.app.github.dev"; // <— use this line temporarily if needed
 const API_URL = rawUrl ? rawUrl.replace(/\/+$/, "") : "";
 
 // --- initial messages (module scope)
@@ -31,13 +31,14 @@ const initialMessages: ChatMsg[] = [
   {
     id: "welcome",
     role: "assistant",
-    text: "Hi! Ask me anything. (Connected to server—try a question.)",
+    text: "Hi! Ask me anything. (Connected to server-try a question.)",
     createdAt: Date.now(),
   },
 ];
 
 export default function AskScreen() {
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
 
   // state
   const [messages, setMessages] = useState<ChatMsg[]>(initialMessages);
@@ -62,7 +63,9 @@ export default function AskScreen() {
   const scrollToEnd = useCallback(() => {
     requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
   }, []);
-  useEffect(() => { scrollToEnd(); }, [messages, scrollToEnd]);
+  useEffect(() => {
+    scrollToEnd();
+  }, [messages, scrollToEnd]);
 
   // send
   const onSend = useCallback(async () => {
@@ -79,7 +82,8 @@ export default function AskScreen() {
     setInput("");
 
     try {
-      if (!API_URL) throw new Error("Missing EXPO_PUBLIC_API_URL (restart Expo after setting .env)");
+      if (!API_URL)
+        throw new Error("Missing EXPO_PUBLIC_API_URL (restart Expo after setting .env)");
 
       const r = await fetch(`${API_URL}/chat`, {
         method: "POST",
@@ -87,7 +91,7 @@ export default function AskScreen() {
         body: JSON.stringify({ text: trimmed }),
       });
 
-      const raw = await r.text(); // helpful for debugging
+      const raw = await r.text();
       if (!r.ok) throw new Error(`HTTP ${r.status}: ${raw}`);
 
       const data = JSON.parse(raw);
@@ -111,8 +115,22 @@ export default function AskScreen() {
 
   const renderItem = ({ item }: { item: ChatMsg }) => (
     <View style={[styles.row, item.role === "user" ? styles.right : styles.left]}>
-      <View style={[styles.bubble, item.role === "user" ? styles.userBubble : styles.botBubble]}>
-        <Text style={[styles.text, item.role === "user" ? styles.userText : styles.botText]}>
+      <View
+        style={[
+          styles.bubble,
+          item.role === "user"
+            ? [styles.userBubble, { backgroundColor: colors.userBubble }]
+            : [styles.botBubble, { backgroundColor: colors.botBubble }],
+        ]}
+      >
+        <Text
+          style={[
+            styles.text,
+            item.role === "user"
+              ? { color: colors.userText }
+              : { color: colors.botText },
+          ]}
+        >
           {item.text}
         </Text>
       </View>
@@ -120,7 +138,10 @@ export default function AskScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
+    <SafeAreaView
+      style={[styles.safe, { backgroundColor: colors.background }]}
+      edges={["top", "bottom"]}
+    >
       <Stack.Screen options={{ title: "Ask" }} />
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -128,9 +149,18 @@ export default function AskScreen() {
         keyboardVerticalOffset={80 + insets.top}
       >
         {conn !== "ok" && (
-          <View style={{ padding: 8, backgroundColor: "#402", margin: 8, borderRadius: 8 }}>
-            <Text style={{ color: "#fff" }}>
-              {conn === "checking" ? "Checking server..." : "Cannot reach server. Check EXPO_PUBLIC_API_URL."}
+          <View
+            style={{
+              padding: 8,
+              backgroundColor: colors.alertActive,
+              margin: 8,
+              borderRadius: 8,
+            }}
+          >
+            <Text style={{ color: colors.text }}>
+              {conn === "checking"
+                ? "Checking server..."
+                : "Cannot reach server. Check EXPO_PUBLIC_API_URL."}
             </Text>
           </View>
         )}
@@ -145,19 +175,37 @@ export default function AskScreen() {
           onLayout={scrollToEnd}
         />
 
-        <View style={styles.inputBar}>
+        <View
+          style={[
+            styles.inputBar,
+            {
+              backgroundColor: colors.inputBar,
+              borderTopColor: colors.inputBarBorder,
+            },
+          ]}
+        >
           <TextInput
             value={input}
             onChangeText={setInput}
             placeholder="Type a message"
-            placeholderTextColor="#9aa0a6"
-            style={styles.input}
+            placeholderTextColor={colors.inputPlaceholder}
+            style={[
+              styles.input,
+              {
+                backgroundColor: colors.inputField,
+                color: colors.inputText,
+              },
+            ]}
             multiline
           />
           <TouchableOpacity
             accessibilityLabel="Send message"
             onPress={onSend}
-            style={[styles.sendBtn, !input.trim() && styles.sendBtnDisabled]}
+            style={[
+              styles.sendBtn,
+              { backgroundColor: colors.primary },
+              !input.trim() && styles.sendBtnDisabled,
+            ]}
             disabled={!input.trim()}
           >
             <Ionicons name="send" size={18} color="#fff" />
@@ -169,7 +217,7 @@ export default function AskScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#f6f7f8ff" },
+  safe: { flex: 1 },
   flex: { flex: 1 },
   listContent: { padding: 12, gap: 8 },
   row: { flexDirection: "row", marginVertical: 2 },
@@ -181,19 +229,15 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 16,
   },
-  botBubble: { backgroundColor: "#1f2933", borderTopLeftRadius: 4 },
-  userBubble: { backgroundColor: "#9f2828ff", borderTopRightRadius: 4 },
+  botBubble: { borderTopLeftRadius: 4 },
+  userBubble: { borderTopRightRadius: 4 },
   text: { fontSize: 16, lineHeight: 22 },
-  botText: { color: "#e6eef3" },
-  userText: { color: "#f7fff9" },
   inputBar: {
     flexDirection: "row",
     alignItems: "flex-end",
     padding: 10,
     gap: 8,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "#27323a",
-    backgroundColor: "#0f141a",
   },
   input: {
     flex: 1,
@@ -202,8 +246,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 12,
-    backgroundColor: "#1a2229",
-    color: "#e6eef3",
   },
   sendBtn: {
     height: 44,
@@ -211,7 +253,6 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#9f2828ff",
   },
   sendBtnDisabled: { opacity: 0.5 },
 });

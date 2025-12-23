@@ -3,10 +3,12 @@ import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import { useUserRole } from "../context/UserRoleContext";
+import { useTheme } from "../context/ThemeContext";
 
 export default function Index() {
   const router = useRouter();
   const { setRole } = useUserRole();
+  const { colors } = useTheme();
 
   const handleAnnouncer = () => {
     setRole("announcer");
@@ -19,16 +21,30 @@ export default function Index() {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Multilingual Transit Companion</Text>
-      <Text style={styles.subtitle}>Choose how you want to use the app</Text>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <Text style={[styles.title, { color: colors.text }]}>
+        Multilingual Transit Companion
+      </Text>
+      <Text style={[styles.subtitle, { color: colors.textMuted }]}>
+        Choose how you want to use the app
+      </Text>
 
-      <TouchableOpacity style={styles.primaryButton} onPress={handleAnnouncer}>
-        <Text style={styles.buttonText}>Announcer</Text>
+      <TouchableOpacity
+        style={[styles.primaryButton, { backgroundColor: colors.primary }]}
+        onPress={handleAnnouncer}
+      >
+        <Text style={[styles.buttonText, { color: colors.textInverse }]}>
+          Announcer
+        </Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.secondaryButton} onPress={handlePassenger}>
-        <Text style={styles.buttonText}>Passenger</Text>
+      <TouchableOpacity
+        style={[styles.secondaryButton, { backgroundColor: colors.primary }]}
+        onPress={handlePassenger}
+      >
+        <Text style={[styles.buttonText, { color: colors.textInverse }]}>
+          Passenger
+        </Text>
       </TouchableOpacity>
     </View>
   );
@@ -40,41 +56,34 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     justifyContent: "center",
     alignItems: "stretch",
-    backgroundColor: "#f8f8f9ff",
   },
   title: {
     fontSize: 26,
     fontWeight: "700",
-    color: "#050505ff",
     textAlign: "center",
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
-    color: "#9ca3af",
     textAlign: "center",
     marginBottom: 32,
   },
   primaryButton: {
-    backgroundColor: "#9f2828ff",
     borderRadius: 14,
     paddingVertical: 14,
     paddingHorizontal: 16,
     alignItems: "center",
-    marginBottom: 16
+    marginBottom: 16,
   },
   secondaryButton: {
-    backgroundColor: "#9f2828ff",
     borderRadius: 14,
     paddingVertical: 14,
     paddingHorizontal: 16,
     alignItems: "center",
-
   },
   buttonText: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#f9fafb",
     textAlign: "center",
   },
 });
