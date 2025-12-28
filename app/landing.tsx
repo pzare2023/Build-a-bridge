@@ -1,6 +1,6 @@
 // app/home.tsx  -> MAIN APP HOME
-import { Text, View, Pressable, StyleSheet } from "react-native";
 import { router } from "expo-router";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
 export default function Home() {
   return (
@@ -8,7 +8,7 @@ export default function Home() {
       <Text style={styles.title}>Transit Companion</Text>
       <View style={styles.buttons}>
         <AppButton title="Ask the Chatbot" onPress={() => router.push("/ask")} />
-        <AppButton title="Updates Dashboard" onPress={() => router.push("/updates")} />
+        <AppButton title="TTC Alerts" onPress={() => router.push("/updates")} />
         <AppButton title="Live Announcements" onPress={() => router.push("/live")} />
       </View>
     </View>

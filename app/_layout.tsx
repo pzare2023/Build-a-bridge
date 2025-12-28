@@ -53,7 +53,7 @@ function StackNavigator() {
       />
       <Stack.Screen
         name="updates"
-        options={{ title: "Updates Dashboard" }}
+        options={{ title: "TTC Alerts" }}
       />
     </Stack>
   );

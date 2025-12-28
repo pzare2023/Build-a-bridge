@@ -1,8 +1,8 @@
 // app/home.tsx  -> MAIN APP HOME
-import { Text, View, Pressable, StyleSheet, TouchableOpacity } from "react-native";
 import { router } from "expo-router";
-import { useTheme } from "../context/ThemeContext";
+import { Pressable, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useAuth } from "../context/AuthContext";
+import { useTheme } from "../context/ThemeContext";
 import { useUserRole } from "../context/UserRoleContext";
 
 export default function Home() {
@@ -40,7 +40,7 @@ export default function Home() {
       </Text>
       <View style={styles.buttons}>
         <AppButton title="Ask the Chatbot" onPress={() => router.push("/ask")} />
-        <AppButton title="Updates Dashboard" onPress={() => router.push("/updates")} />
+        <AppButton title="TTC Alerts" onPress={() => router.push("/updates")} />
         <AppButton title="Live Announcements" onPress={() => router.push("/live")} />
         {isAuthenticated && currentUser?.role === "admin" && (
           <AppButton title="Admin Dashboard" onPress={() => router.push("/admin/dashboard")} />
