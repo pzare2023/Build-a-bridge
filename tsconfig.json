@@ -3,9 +3,9 @@
   "compilerOptions": {
     "jsx": "react-jsx",
     "target": "esnext",
-    "module": "esnext",
+    "module": "nodenext",
     "lib": ["esnext"],
-    "moduleResolution": "node",
+    "moduleResolution": "nodenext",
     "resolveJsonModule": true,
     "allowJs": true,
     "skipLibCheck": true,

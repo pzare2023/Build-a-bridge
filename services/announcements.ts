@@ -12,6 +12,8 @@ export interface Announcement {
  priority: AnnouncementPriority;
  driverName: string;
  createdAt: number;
+ announcerId?: string;
+ announcerEmail?: string;
 }
 
 
@@ -28,13 +30,22 @@ export async function saveAnnouncement(
  trainNumber: string,
  text: string,
  priority: AnnouncementPriority,
- driverName: string
+ driverName: string,
+ announcerId?: string,
+ announcerEmail?: string
 ): Promise<void> {
  const trainDoc = getTrainDoc(trainNumber);
  const now = Date.now();
 
 
- const newAnnouncement: Announcement = { text, priority, driverName, createdAt: now };
+ const newAnnouncement: Announcement = {
+   text,
+   priority,
+   driverName,
+   createdAt: now,
+   ...(announcerId && { announcerId }),
+   ...(announcerEmail && { announcerEmail })
+ };
 
 
  try {
@@ -130,6 +141,46 @@ export async function getAnnouncements(trainNumber: string): Promise<Announcemen
    return announcements;
  } catch (error) {
    console.error("Error getting announcements:", error);
+   throw error;
+ }
+}
+
+
+export async function deleteAnnouncement(
+ trainNumber: string,
+ announcementToDelete: Announcement
+): Promise<void> {
+ const trainDoc = getTrainDoc(trainNumber);
+
+
+ try {
+   const docSnapshot = await getDoc(trainDoc);
+
+
+   if (!docSnapshot.exists()) {
+     throw new Error("Train document not found");
+   }
+
+
+   const data = docSnapshot.data() as Partial<TrainDocument>;
+   let announcements = data.announcements || [];
+
+
+   // Find and remove the announcement by matching createdAt timestamp
+   // This is more reliable than using an index
+   announcements = announcements.filter(
+     (a) => a.createdAt !== announcementToDelete.createdAt
+   );
+
+
+   // Update the document
+   await setDoc(
+     trainDoc,
+     { announcements, updatedAt: serverTimestamp() },
+     { merge: true }
+   );
+ } catch (error) {
+   console.error("Error deleting announcement:", error);
    throw error;
  }
 }

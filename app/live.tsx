@@ -1,10 +1,14 @@
 // app/live.tsx
 import { Ionicons } from "@expo/vector-icons";
 import { Audio } from "expo-av";
+import { useRouter } from "expo-router";
 import * as Speech from "expo-speech";
 import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -12,11 +16,13 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { useUserRole } from "../context/UserRoleContext";
 import {
   Announcement,
   AnnouncementPriority,
+  deleteAnnouncement,
   saveAnnouncement,
   subscribeToAnnouncements,
 } from "../services/announcements";
@@ -71,9 +77,26 @@ async function fetchWithTimeout(
 }
 
 export default function Live() {
-  const { role } = useUserRole();
-  const { colors, isDark } = useTheme();
+  const { role, setRole } = useUserRole();
+  const { colors } = useTheme();
+  const { isAuthenticated, currentUser, logout } = useAuth();
+  const router = useRouter();
   const isPassenger = role === "passenger";
+
+  // Auth check for announcers
+  useEffect(() => {
+    if (role === "announcer" && !isAuthenticated) {
+      // Redirect to login if announcer is not authenticated
+      router.replace("/auth/login");
+    }
+  }, [role, isAuthenticated, router]);
+
+  // Logout handler
+  const handleLogout = async () => {
+    await logout();
+    setRole(null);
+    router.replace("/");
+  };
 
   // Common state
   const [trainNumber, setTrainNumber] = useState("");
@@ -86,23 +109,32 @@ export default function Live() {
   const [transcript, setTranscript] = useState("");
   const [isUploading, setIsUploading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [showAnnouncementsList, setShowAnnouncementsList] = useState(false);
 
   // Passenger state
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [autoSpeak, setAutoSpeak] = useState(true);
   const lastAnnouncementRef = useRef<string | null>(null);
   const unsubscribeRef = useRef<(() => void) | null>(null);
+  const trainNumberInputRef = useRef<TextInput>(null);
 
   // Load saved train number and driver name
   useEffect(() => {
     const loadSavedData = async () => {
       const savedTrain = await getTrainNumber();
       const savedDriver = await getDriverName();
+
       if (savedTrain) setTrainNumber(savedTrain);
-      if (savedDriver) setDriverName(savedDriver);
+
+      // For announcers, use authenticated user's name as default
+      if (role === "announcer" && currentUser) {
+        setDriverName(currentUser.name);
+      } else if (savedDriver) {
+        setDriverName(savedDriver);
+      }
     };
     loadSavedData();
-  }, []);
+  }, [role, currentUser]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -145,7 +177,13 @@ export default function Live() {
     unsubscribeRef.current = subscribeToAnnouncements(
       trainNumber.trim(),
       (newAnnouncements) => {
-        setAnnouncements(newAnnouncements);
+        // Filter announcements to only show those less than 1 hour old
+        const now = Date.now();
+        const oneHourAgo = now - (60 * 60 * 1000);
+        const filteredAnnouncements = newAnnouncements.filter(
+          (announcement) => announcement.createdAt >= oneHourAgo
+        );
+        setAnnouncements(filteredAnnouncements);
       },
       (error) => {
         console.error("Subscription error:", error);
@@ -173,6 +211,24 @@ export default function Live() {
     if (!trainNumber.trim() || !driverName.trim()) return;
     await saveTrainNumber(trainNumber.trim());
     await saveDriverName(driverName.trim());
+
+    // Subscribe to announcements for this train
+    if (unsubscribeRef.current) {
+      unsubscribeRef.current();
+    }
+
+    unsubscribeRef.current = subscribeToAnnouncements(
+      trainNumber.trim(),
+      (newAnnouncements) => {
+        // Show all announcements for announcers (no time filter)
+        setAnnouncements(newAnnouncements);
+      },
+      (error) => {
+        console.error("Subscription error:", error);
+        setIsConnected(false);
+      }
+    );
+
     setIsConnected(true);
   };
 
@@ -264,7 +320,9 @@ export default function Live() {
             trainNumber.trim(),
             transcribedText,
             priority,
-            driverName.trim()
+            driverName.trim(),
+            currentUser?.id,
+            currentUser?.email
           );
           setTranscript(`"${transcribedText}"`);
         } catch (saveError) {
@@ -288,129 +346,228 @@ export default function Live() {
     }
   };
 
+  // Delete announcement handler
+  const handleDeleteAnnouncement = async (announcement: Announcement) => {
+    Alert.alert(
+      "Delete Announcement",
+      "Are you sure you want to delete this announcement?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteAnnouncement(trainNumber.trim(), announcement);
+            } catch (error) {
+              console.error("Error deleting announcement:", error);
+              Alert.alert("Error", "Failed to delete announcement. Please try again.");
+            }
+          },
+        },
+      ]
+    );
+  };
+
   // Get priority config
   const getPriorityConfig = (p: AnnouncementPriority) =>
     PRIORITIES.find((pr) => pr.key === p) || PRIORITIES[2];
+
+  // Format date
+  const formatDate = (timestamp: number) => {
+    const date = new Date(timestamp);
+    return date.toLocaleString();
+  };
 
   // Render Driver UI
   const renderDriverUI = () => (
     <>
       {!isConnected ? (
-        // Setup form
-        <View style={styles.setupContainer}>
-          <Text style={[styles.label, { color: colors.text }]}>Train Number</Text>
-          <TextInput
-            style={[
-              styles.input,
-              {
-                backgroundColor: colors.inputBackground,
-                color: colors.text,
-                borderColor: colors.border,
-              },
-            ]}
-            value={trainNumber}
-            onChangeText={setTrainNumber}
-            placeholder="e.g., 5421"
-            placeholderTextColor={colors.textMuted}
-            keyboardType="number-pad"
-          />
-
-          <Text style={[styles.label, { color: colors.text }]}>Driver Name</Text>
-          <TextInput
-            style={[
-              styles.input,
-              {
-                backgroundColor: colors.inputBackground,
-                color: colors.text,
-                borderColor: colors.border,
-              },
-            ]}
-            value={driverName}
-            onChangeText={setDriverName}
-            placeholder="e.g., John Smith"
-            placeholderTextColor={colors.textMuted}
-          />
-
-          <TouchableOpacity
-            style={[
-              styles.connectButton,
-              { backgroundColor: colors.primary },
-              (!trainNumber.trim() || !driverName.trim()) && styles.buttonDisabled,
-            ]}
-            onPress={startSession}
-            disabled={!trainNumber.trim() || !driverName.trim()}
+        // Enhanced Setup form
+        <KeyboardAvoidingView
+          style={styles.setupContainer}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={100}
+        >
+          <ScrollView
+            contentContainerStyle={styles.setupScrollContent}
+            keyboardShouldPersistTaps="handled"
           >
-            <Text style={styles.connectButtonText}>Start Session</Text>
-          </TouchableOpacity>
-        </View>
+            <View style={[styles.setupCard, { backgroundColor: colors.surface }]}>
+              <View style={styles.setupHeader}>
+                <View style={[styles.setupIconCircle, { backgroundColor: colors.primary + "20" }]}>
+                  <Ionicons name="settings-outline" size={32} color={colors.primary} />
+                </View>
+                <Text style={[styles.setupTitle, { color: colors.text }]}>
+                  Session Setup
+                </Text>
+                <Text style={[styles.setupSubtitle, { color: colors.textMuted }]}>
+                  Configure your broadcast session
+                </Text>
+              </View>
+
+              <View style={styles.formGroup}>
+                <View style={styles.inputWrapper}>
+                  <Ionicons name="train" size={20} color={colors.primary} />
+                  <View style={styles.inputContent}>
+                    <Text style={[styles.label, { color: colors.text }]}>Train Number</Text>
+                    <TextInput
+                      style={[
+                        styles.input,
+                        {
+                          backgroundColor: colors.background,
+                          color: colors.text,
+                          borderColor: colors.border,
+                        },
+                      ]}
+                      value={trainNumber}
+                      onChangeText={setTrainNumber}
+                      placeholder="e.g., 5421"
+                      placeholderTextColor={colors.textMuted}
+                      keyboardType="number-pad"
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.inputWrapper}>
+                  <Ionicons name="person" size={20} color={colors.primary} />
+                  <View style={styles.inputContent}>
+                    <Text style={[styles.label, { color: colors.text }]}>Announcer Name</Text>
+                    <TextInput
+                      style={[
+                        styles.input,
+                        {
+                          backgroundColor: colors.background,
+                          color: colors.text,
+                          borderColor: colors.border,
+                        },
+                      ]}
+                      value={driverName}
+                      onChangeText={setDriverName}
+                      placeholder="e.g., John Smith"
+                      placeholderTextColor={colors.textMuted}
+                    />
+                  </View>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={[
+                  styles.connectButton,
+                  { backgroundColor: colors.primary },
+                  (!trainNumber.trim() || !driverName.trim()) && styles.buttonDisabled,
+                ]}
+                onPress={startSession}
+                disabled={!trainNumber.trim() || !driverName.trim()}
+              >
+                <Ionicons name="play-circle" size={24} color="#fff" />
+                <Text style={styles.connectButtonText}>Start Broadcast Session</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       ) : (
-        // Recording UI
-        <View style={styles.recordingContainer}>
-          <View style={styles.sessionInfo}>
-            <Text style={[styles.sessionText, { color: colors.textSecondary }]}>
-              Train: {trainNumber} | Driver: {driverName}
-            </Text>
-            <TouchableOpacity onPress={() => setIsConnected(false)}>
-              <Text style={[styles.changeLink, { color: colors.primary }]}>
-                Change
-              </Text>
-            </TouchableOpacity>
+        // Enhanced Recording UI
+        <ScrollView
+          style={styles.recordingContainer}
+          contentContainerStyle={styles.recordingContent}
+          showsVerticalScrollIndicator={true}
+        >
+          {/* Session Info Card */}
+          <View style={[styles.sessionCard, { backgroundColor: colors.surface }]}>
+            <View style={styles.sessionHeader}>
+              <View style={styles.sessionBadge}>
+                <View style={styles.liveDot} />
+                <Text style={[styles.liveText, { color: colors.text }]}>LIVE</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setIsConnected(false)}
+                style={[styles.changeButton, { backgroundColor: colors.background }]}
+              >
+                <Ionicons name="settings-outline" size={16} color={colors.primary} />
+                <Text style={[styles.changeLink, { color: colors.primary }]}>
+                  Change
+                </Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.sessionDetails}>
+              <View style={styles.sessionDetailItem}>
+                <Ionicons name="train" size={18} color={colors.primary} />
+                <Text style={[styles.sessionDetailText, { color: colors.text }]}>
+                  Train {trainNumber}
+                </Text>
+              </View>
+              <View style={styles.sessionDetailItem}>
+                <Ionicons name="person" size={18} color={colors.primary} />
+                <Text style={[styles.sessionDetailText, { color: colors.text }]}>
+                  {driverName}
+                </Text>
+              </View>
+            </View>
           </View>
 
           {/* Priority Selector */}
-          <Text style={[styles.label, { color: colors.text }]}>Priority</Text>
-          <View style={styles.priorityContainer}>
-            {PRIORITIES.map((p) => (
-              <TouchableOpacity
-                key={p.key}
-                style={[
-                  styles.priorityButton,
-                  {
-                    backgroundColor:
-                      priority === p.key ? p.color : colors.surface,
-                    borderColor: p.color,
-                  },
-                ]}
-                onPress={() => setPriority(p.key)}
-              >
-                <Ionicons
-                  name={p.icon as any}
-                  size={18}
-                  color={priority === p.key ? "#fff" : p.color}
-                />
-                <Text
+          <View style={styles.prioritySection}>
+            <Text style={[styles.sectionLabel, { color: colors.text }]}>
+              Select Priority Level
+            </Text>
+            <View style={styles.priorityContainer}>
+              {PRIORITIES.map((p) => (
+                <TouchableOpacity
+                  key={p.key}
                   style={[
-                    styles.priorityText,
-                    { color: priority === p.key ? "#fff" : p.color },
+                    styles.priorityButton,
+                    {
+                      backgroundColor:
+                        priority === p.key ? p.color : colors.surface,
+                      borderColor: p.color,
+                    },
                   ]}
+                  onPress={() => setPriority(p.key)}
                 >
-                  {p.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
+                  <Ionicons
+                    name={p.icon as any}
+                    size={20}
+                    color={priority === p.key ? "#fff" : p.color}
+                  />
+                  <Text
+                    style={[
+                      styles.priorityText,
+                      { color: priority === p.key ? "#fff" : p.color },
+                    ]}
+                  >
+                    {p.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
 
           {/* Mic Button */}
-          <TouchableOpacity
-            style={[
-              styles.micButton,
-              recording ? styles.micActive : styles.micIdle,
-            ]}
-            onPress={recording ? stopRecording : startRecording}
-            disabled={isUploading || isSaving}
-          >
-            <Ionicons
-              name={recording ? "mic" : "mic-outline"}
-              size={60}
-              color="#fff"
-            />
-          </TouchableOpacity>
+          <View style={styles.micSection}>
+            <TouchableOpacity
+              style={[
+                styles.micButton,
+                recording ? styles.micActive : styles.micIdle,
+              ]}
+              onPress={recording ? stopRecording : startRecording}
+              disabled={isUploading || isSaving}
+            >
+              <View style={styles.micRing}>
+                <Ionicons
+                  name={recording ? "mic" : "mic-outline"}
+                  size={64}
+                  color="#fff"
+                />
+              </View>
+            </TouchableOpacity>
 
-          <Text style={[styles.instructionText, { color: colors.textSecondary }]}>
-            {recording
-              ? "Recording... tap to stop"
-              : "Tap the mic to record announcement"}
-          </Text>
+            <Text style={[styles.instructionText, { color: colors.textMuted }]}>
+              {recording
+                ? "🔴 Recording... tap to stop"
+                : "Tap microphone to start recording"}
+            </Text>
+          </View>
 
           {/* Transcript Box */}
           <View
@@ -418,23 +575,141 @@ export default function Live() {
               styles.transcriptBox,
               {
                 borderColor: colors.border,
-                backgroundColor: isDark ? colors.surface : colors.background,
+                backgroundColor: colors.surface,
               },
             ]}
           >
-            <Text style={[styles.transcriptText, { color: colors.text }]}>
-              {transcript || "Your transcription will appear here..."}
-            </Text>
+            {transcript ? (
+              <>
+                <View style={styles.transcriptHeader}>
+                  <Ionicons name="document-text" size={20} color={colors.primary} />
+                  <Text style={[styles.transcriptLabel, { color: colors.text }]}>
+                    Transcription
+                  </Text>
+                </View>
+                <Text style={[styles.transcriptText, { color: colors.text }]}>
+                  {transcript}
+                </Text>
+              </>
+            ) : (
+              <View style={styles.transcriptPlaceholder}>
+                <Ionicons name="chatbubbles-outline" size={40} color={colors.textMuted} />
+                <Text style={[styles.transcriptPlaceholderText, { color: colors.textMuted }]}>
+                  Your transcription will appear here...
+                </Text>
+              </View>
+            )}
           </View>
 
           {(isUploading || isSaving) && (
-            <ActivityIndicator
-              size="large"
-              color={colors.primary}
-              style={{ marginTop: 20 }}
-            />
+            <View style={styles.loadingOverlay}>
+              <ActivityIndicator size="large" color={colors.primary} />
+              <Text style={[styles.loadingText, { color: colors.text }]}>
+                {isUploading ? "Transcribing..." : "Sending announcement..."}
+              </Text>
+            </View>
           )}
-        </View>
+
+          {/* Announcements List Section */}
+          <View style={styles.announcementsListSection}>
+            <View style={styles.announcementsListHeader}>
+              <View style={styles.announcementsHeaderLeft}>
+                <Ionicons name="list" size={20} color={colors.primary} />
+                <Text style={[styles.sectionLabel, { color: colors.text }]}>
+                  Your Announcements ({announcements.length})
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowAnnouncementsList(!showAnnouncementsList)}
+                style={styles.toggleButton}
+              >
+                <Ionicons
+                  name={showAnnouncementsList ? "chevron-up" : "chevron-down"}
+                  size={20}
+                  color={colors.primary}
+                />
+              </TouchableOpacity>
+            </View>
+
+            {showAnnouncementsList && (
+              <View style={styles.announcementsListContent}>
+                {announcements.length === 0 ? (
+                  <View style={styles.emptyAnnouncementsList}>
+                    <Ionicons name="megaphone-outline" size={48} color={colors.textMuted} />
+                    <Text style={[styles.emptyAnnouncementsText, { color: colors.textMuted }]}>
+                      No announcements yet
+                    </Text>
+                  </View>
+                ) : (
+                  announcements.map((announcement, index) => {
+                    const priorityConfig = getPriorityConfig(announcement.priority);
+                    return (
+                      <View
+                        key={`${announcement.createdAt}-${index}`}
+                        style={[
+                          styles.announcementItem,
+                          {
+                            backgroundColor: colors.surface,
+                            borderLeftColor: priorityConfig.color,
+                          },
+                        ]}
+                      >
+                        <View style={styles.announcementItemHeader}>
+                          <View
+                            style={[
+                              styles.priorityBadgeSmall,
+                              {
+                                backgroundColor: priorityConfig.color + "20",
+                                borderColor: priorityConfig.color,
+                              },
+                            ]}
+                          >
+                            <Ionicons
+                              name={priorityConfig.icon as any}
+                              size={12}
+                              color={priorityConfig.color}
+                            />
+                            <Text
+                              style={[
+                                styles.priorityBadgeSmallText,
+                                { color: priorityConfig.color },
+                              ]}
+                            >
+                              {priorityConfig.label}
+                            </Text>
+                          </View>
+                          <TouchableOpacity
+                            onPress={() => handleDeleteAnnouncement(announcement)}
+                            style={styles.deleteButton}
+                          >
+                            <Ionicons name="trash-outline" size={18} color="#ef4444" />
+                          </TouchableOpacity>
+                        </View>
+                        <Text style={[styles.announcementItemText, { color: colors.text }]}>
+                          {announcement.text}
+                        </Text>
+                        <View style={styles.announcementItemFooter}>
+                          <View style={styles.announcementItemMeta}>
+                            <Ionicons name="person-outline" size={12} color={colors.textMuted} />
+                            <Text style={[styles.metaText, { color: colors.textMuted }]}>
+                              {announcement.driverName}
+                            </Text>
+                          </View>
+                          <View style={styles.announcementItemMeta}>
+                            <Ionicons name="time-outline" size={12} color={colors.textMuted} />
+                            <Text style={[styles.metaText, { color: colors.textMuted }]}>
+                              {formatDate(announcement.createdAt)}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+                    );
+                  })
+                )}
+              </View>
+            )}
+          </View>
+        </ScrollView>
       )}
     </>
   );
@@ -443,87 +718,149 @@ export default function Live() {
   const renderPassengerUI = () => (
     <>
       {!isConnected ? (
-        // Join form
-        <View style={styles.setupContainer}>
-          <Text style={[styles.label, { color: colors.text }]}>Train Number</Text>
-          <TextInput
-            style={[
-              styles.input,
-              {
-                backgroundColor: colors.inputBackground,
-                color: colors.text,
-                borderColor: colors.border,
-              },
-            ]}
-            value={trainNumber}
-            onChangeText={setTrainNumber}
-            placeholder="Enter train number"
-            placeholderTextColor={colors.textMuted}
-            keyboardType="number-pad"
-          />
-
-          <TouchableOpacity
-            style={[
-              styles.connectButton,
-              { backgroundColor: colors.primary },
-              !trainNumber.trim() && styles.buttonDisabled,
-            ]}
-            onPress={connectToTrain}
-            disabled={!trainNumber.trim()}
+        // Enhanced Join form
+        <KeyboardAvoidingView
+          style={styles.setupContainer}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={100}
+        >
+          <ScrollView
+            contentContainerStyle={styles.setupScrollContent}
+            keyboardShouldPersistTaps="handled"
           >
-            <Text style={styles.connectButtonText}>Join Train</Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        // Announcements View
-        <View style={styles.announcementsContainer}>
-          {/* Connection Status */}
-          <View style={styles.statusBar}>
-            <View style={styles.statusLeft}>
-              <View style={styles.liveIndicator}>
-                <View style={styles.liveDot} />
-                <Text style={[styles.liveText, { color: colors.text }]}>
-                  Connected to Train {trainNumber}
+            <View style={[styles.setupCard, { backgroundColor: colors.surface }]}>
+              <View style={styles.setupHeader}>
+                <View style={[styles.setupIconCircle, { backgroundColor: colors.primary + "20" }]}>
+                  <Ionicons name="train-outline" size={36} color={colors.primary} />
+                </View>
+                <Text style={[styles.setupTitle, { color: colors.text }]}>
+                  Join Your Train
+                </Text>
+                <Text style={[styles.setupSubtitle, { color: colors.textMuted }]}>
+                  Enter your train number to receive live announcements
                 </Text>
               </View>
+
+              <View style={styles.formGroup}>
+                <View style={styles.inputWrapper}>
+                  <Ionicons name="train" size={20} color={colors.primary} />
+                  <View style={styles.inputContent}>
+                    <Text style={[styles.label, { color: colors.text }]}>Train Number</Text>
+                    <TextInput
+                      ref={trainNumberInputRef}
+                      style={[
+                        styles.input,
+                        {
+                          backgroundColor: colors.inputField,
+                          color: colors.inputText,
+                          borderColor: colors.border,
+                        },
+                      ]}
+                      value={trainNumber}
+                      onChangeText={setTrainNumber}
+                      placeholder="e.g., 5421"
+                      placeholderTextColor={colors.textMuted}
+                      keyboardType="number-pad"
+                    />
+                  </View>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={[
+                  styles.connectButton,
+                  { backgroundColor: colors.primary },
+                  !trainNumber.trim() && styles.buttonDisabled,
+                ]}
+                onPress={connectToTrain}
+                disabled={!trainNumber.trim()}
+              >
+                <Ionicons name="enter-outline" size={24} color="#fff" />
+                <Text style={styles.connectButtonText}>Connect to Train</Text>
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity onPress={disconnectFromTrain}>
-              <Text style={[styles.disconnectLink, { color: colors.primary }]}>
-                Leave
-              </Text>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      ) : (
+        // Enhanced Announcements View
+        <View style={styles.announcementsContainer}>
+          {/* Enhanced Connection Status Card */}
+          <View style={[styles.statusCard, { backgroundColor: colors.surface }]}>
+            <View style={styles.statusCardContent}>
+              <View style={styles.statusLeft}>
+                <View style={[styles.liveIndicator, { backgroundColor: "rgba(34, 197, 94, 0.15)" }]}>
+                  <View style={styles.liveDot} />
+                  <Text style={[styles.liveText, { color: colors.text }]}>
+                    Train {trainNumber}
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                onPress={disconnectFromTrain}
+                style={[styles.leaveButton, { backgroundColor: colors.background }]}
+              >
+                <Ionicons name="exit-outline" size={16} color={colors.primary} />
+                <Text style={[styles.disconnectLink, { color: colors.primary }]}>
+                  Leave
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Enhanced Auto-speak toggle */}
+            <TouchableOpacity
+              style={[
+                styles.speakToggle,
+                {
+                  backgroundColor: autoSpeak
+                    ? colors.primary + "15"
+                    : colors.background,
+                  borderColor: autoSpeak ? colors.primary : colors.border,
+                }
+              ]}
+              onPress={() => setAutoSpeak(!autoSpeak)}
+            >
+              <View style={styles.speakToggleLeft}>
+                <Ionicons
+                  name={autoSpeak ? "volume-high" : "volume-mute"}
+                  size={20}
+                  color={autoSpeak ? colors.primary : colors.textMuted}
+                />
+                <Text
+                  style={[
+                    styles.speakToggleText,
+                    { color: autoSpeak ? colors.primary : colors.text },
+                  ]}
+                >
+                  Auto-read announcements
+                </Text>
+              </View>
+              <View style={[
+                styles.toggleSwitch,
+                { backgroundColor: autoSpeak ? colors.primary : colors.textMuted }
+              ]}>
+                <Text style={styles.toggleSwitchText}>
+                  {autoSpeak ? "ON" : "OFF"}
+                </Text>
+              </View>
             </TouchableOpacity>
           </View>
 
-          {/* Auto-speak toggle */}
-          <TouchableOpacity
-            style={styles.speakToggle}
-            onPress={() => setAutoSpeak(!autoSpeak)}
-          >
-            <Ionicons
-              name={autoSpeak ? "volume-high" : "volume-mute"}
-              size={20}
-              color={autoSpeak ? colors.primary : colors.textMuted}
-            />
-            <Text
-              style={[
-                styles.speakToggleText,
-                { color: autoSpeak ? colors.primary : colors.textMuted },
-              ]}
-            >
-              Auto-read: {autoSpeak ? "ON" : "OFF"}
-            </Text>
-          </TouchableOpacity>
-
           {/* Announcements List */}
-          <ScrollView style={styles.announcementsList}>
+          <ScrollView
+            style={styles.announcementsList}
+            contentContainerStyle={styles.announcementsListContent}
+            showsVerticalScrollIndicator={true}
+          >
             {announcements.length === 0 ? (
               <View style={styles.emptyState}>
-                <Ionicons
-                  name="notifications-outline"
-                  size={48}
-                  color={colors.textMuted}
-                />
-                <Text style={[styles.emptyText, { color: colors.textMuted }]}>
+                <View style={[styles.emptyIconCircle, { backgroundColor: colors.surface }]}>
+                  <Ionicons
+                    name="notifications-outline"
+                    size={48}
+                    color={colors.textMuted}
+                  />
+                </View>
+                <Text style={[styles.emptyText, { color: colors.text }]}>
                   No announcements yet
                 </Text>
                 <Text
@@ -533,51 +870,63 @@ export default function Live() {
                 </Text>
               </View>
             ) : (
-              announcements.map((announcement, index) => {
-                const priorityConfig = getPriorityConfig(announcement.priority);
-                return (
-                  <View
-                    key={`${announcement.createdAt}-${index}`}
-                    style={[
-                      styles.announcementCard,
-                      {
-                        backgroundColor: isDark
-                          ? colors.surface
-                          : colors.background,
-                        borderLeftColor: priorityConfig.color,
-                      },
-                    ]}
-                  >
-                    <View style={styles.announcementHeader}>
-                      <View
-                        style={[
-                          styles.priorityBadge,
-                          { backgroundColor: priorityConfig.color },
-                        ]}
-                      >
-                        <Ionicons
-                          name={priorityConfig.icon as any}
-                          size={14}
-                          color="#fff"
-                        />
-                        <Text style={styles.priorityBadgeText}>
-                          {priorityConfig.label.toUpperCase()}
-                        </Text>
+              <>
+                <View style={styles.announcementsHeader}>
+                  <Ionicons name="megaphone" size={18} color={colors.primary} />
+                  <Text style={[styles.announcementsHeaderText, { color: colors.text }]}>
+                    Recent Announcements ({announcements.length})
+                  </Text>
+                </View>
+                {announcements.map((announcement, index) => {
+                  const priorityConfig = getPriorityConfig(announcement.priority);
+                  return (
+                    <View
+                      key={`${announcement.createdAt}-${index}`}
+                      style={[
+                        styles.announcementCard,
+                        {
+                          backgroundColor: colors.surface,
+                          borderLeftColor: priorityConfig.color,
+                        },
+                      ]}
+                    >
+                      <View style={styles.announcementHeader}>
+                        <View
+                          style={[
+                            styles.priorityBadge,
+                            {
+                              backgroundColor: priorityConfig.color + "20",
+                              borderColor: priorityConfig.color,
+                            },
+                          ]}
+                        >
+                          <Ionicons
+                            name={priorityConfig.icon as any}
+                            size={14}
+                            color={priorityConfig.color}
+                          />
+                          <Text style={[styles.priorityBadgeText, { color: priorityConfig.color }]}>
+                            {priorityConfig.label.toUpperCase()}
+                          </Text>
+                        </View>
+                        <View style={styles.timeContainer}>
+                          <Ionicons name="time-outline" size={14} color={colors.textMuted} />
+                          <Text
+                            style={[styles.timeText, { color: colors.textMuted }]}
+                          >
+                            {getRelativeTime(announcement.createdAt)}
+                          </Text>
+                        </View>
                       </View>
                       <Text
-                        style={[styles.timeText, { color: colors.textMuted }]}
+                        style={[styles.announcementText, { color: colors.text }]}
                       >
-                        {getRelativeTime(announcement.createdAt)}
+                        {announcement.text}
                       </Text>
                     </View>
-                    <Text
-                      style={[styles.announcementText, { color: colors.text }]}
-                    >
-                      {announcement.text}
-                    </Text>
-                  </View>
-                );
-              })
+                  );
+                })}
+              </>
             )}
           </ScrollView>
         </View>
@@ -587,15 +936,33 @@ export default function Live() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <Text style={[styles.heading, { color: colors.text }]}>
-        {isPassenger ? "Live Announcements" : "Broadcast Announcement"}
-      </Text>
-
-      <Text style={[styles.modeLabel, { color: colors.textSecondary }]}>
-        {isPassenger
-          ? "Receive real-time announcements from your train"
-          : "Record and broadcast announcements to passengers"}
-      </Text>
+      {/* Enhanced Header with gradient-like effect */}
+      <View style={[styles.headerContainer, { backgroundColor: colors.primary }]}>
+        <View style={styles.headerContent}>
+          <View style={styles.headerTitleContainer}>
+            <Ionicons
+              name={isPassenger ? "notifications" : "megaphone"}
+              size={28}
+              color="#fff"
+            />
+            <View style={styles.headerTextWrapper}>
+              <Text style={styles.heading}>
+                {isPassenger ? "Live Announcements" : "Broadcast Announcements"}
+              </Text>
+              <Text style={styles.headerSubtitle}>
+                {isPassenger
+                  ? "Real-time updates from your train"
+                  : "Send announcements to passengers"}
+              </Text>
+            </View>
+          </View>
+          {!isPassenger && isAuthenticated && (
+            <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
+              <Ionicons name="log-out-outline" size={22} color="#fff" />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
 
       {isPassenger ? renderPassengerUI() : renderDriverUI()}
     </View>
@@ -605,29 +972,101 @@ export default function Live() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingTop: 20,
+  },
+  headerContainer: {
+    paddingTop: 40,
+    paddingBottom: 24,
     paddingHorizontal: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  headerContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  headerTitleContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    flex: 1,
+  },
+  headerTextWrapper: {
+    flex: 1,
   },
   heading: {
     fontSize: 22,
-    fontWeight: "600",
-    marginBottom: 4,
-    textAlign: "center",
+    fontWeight: "700",
+    color: "#fff",
+    marginBottom: 2,
   },
-  modeLabel: {
-    fontSize: 14,
-    marginBottom: 24,
-    textAlign: "center",
-    paddingHorizontal: 20,
+  headerSubtitle: {
+    fontSize: 13,
+    color: "#fff",
+    opacity: 0.9,
+  },
+  logoutButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
   },
   setupContainer: {
     flex: 1,
+  },
+  setupScrollContent: {
+    flexGrow: 1,
     justifyContent: "center",
-    paddingBottom: 100,
+    paddingHorizontal: 20,
+    paddingBottom: 40,
+  },
+  setupCard: {
+    borderRadius: 20,
+    padding: 24,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 5,
+  },
+  setupHeader: {
+    alignItems: "center",
+    marginBottom: 32,
+  },
+  setupIconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+  },
+  setupTitle: {
+    fontSize: 24,
+    fontWeight: "700",
+    marginBottom: 6,
+  },
+  setupSubtitle: {
+    fontSize: 14,
+    textAlign: "center",
+  },
+  formGroup: {
+    gap: 20,
+    marginBottom: 24,
+  },
+  inputWrapper: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+  },
+  inputContent: {
+    flex: 1,
   },
   label: {
-    fontSize: 16,
-    fontWeight: "500",
+    fontSize: 14,
+    fontWeight: "600",
     marginBottom: 8,
   },
   input: {
@@ -635,96 +1074,217 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 14,
     fontSize: 16,
-    marginBottom: 20,
   },
   connectButton: {
-    borderRadius: 12,
+    flexDirection: "row",
+    borderRadius: 14,
     paddingVertical: 16,
+    paddingHorizontal: 24,
     alignItems: "center",
-    marginTop: 10,
+    justifyContent: "center",
+    gap: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 3,
   },
   connectButtonText: {
     color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
+    fontSize: 17,
+    fontWeight: "700",
   },
   buttonDisabled: {
     opacity: 0.5,
   },
   recordingContainer: {
     flex: 1,
-    alignItems: "center",
   },
-  sessionInfo: {
+  recordingContent: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 20,
+  },
+  sessionCard: {
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 24,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  sessionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  sessionBadge: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 20,
-    gap: 10,
+    gap: 8,
+    backgroundColor: "rgba(34, 197, 94, 0.15)",
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
   },
-  sessionText: {
-    fontSize: 14,
+  liveText: {
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 1,
+  },
+  changeButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
   },
   changeLink: {
-    fontSize: 14,
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  sessionDetails: {
+    gap: 10,
+  },
+  sessionDetailItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  sessionDetailText: {
+    fontSize: 15,
     fontWeight: "500",
+  },
+  prioritySection: {
+    marginBottom: 28,
+  },
+  sectionLabel: {
+    fontSize: 15,
+    fontWeight: "600",
+    marginBottom: 12,
   },
   priorityContainer: {
     flexDirection: "row",
     gap: 10,
-    marginBottom: 30,
+    flexWrap: "wrap",
   },
   priorityButton: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 10,
+    justifyContent: "center",
+    paddingVertical: 12,
     paddingHorizontal: 14,
-    borderRadius: 10,
+    borderRadius: 12,
     borderWidth: 2,
     gap: 6,
+    minWidth: 100,
   },
   priorityText: {
     fontSize: 14,
-    fontWeight: "500",
+    fontWeight: "700",
+  },
+  micSection: {
+    alignItems: "center",
+    marginBottom: 24,
   },
   micButton: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+    width: 140,
+    height: 140,
+    borderRadius: 70,
     justifyContent: "center",
     alignItems: "center",
     shadowColor: "#000",
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 8,
-    marginBottom: 20,
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 10,
+    marginBottom: 16,
   },
-  micIdle: { backgroundColor: "#1E90FF" },
+  micRing: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 70,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  micIdle: {
+    backgroundColor: "#1E90FF",
+  },
   micActive: {
     backgroundColor: "#FF3B30",
     shadowColor: "#FF3B30",
-    shadowOpacity: 0.4,
-    shadowRadius: 20,
+    shadowOpacity: 0.5,
+    shadowRadius: 24,
   },
   instructionText: {
-    fontSize: 16,
-    marginBottom: 20,
+    fontSize: 15,
     textAlign: "center",
+    fontWeight: "500",
   },
   transcriptBox: {
-    width: "100%",
-    minHeight: 120,
+    minHeight: 140,
     borderWidth: 1,
-    borderRadius: 12,
-    padding: 15,
+    borderRadius: 16,
+    padding: 20,
+  },
+  transcriptHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 12,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(128, 128, 128, 0.2)",
+  },
+  transcriptLabel: {
+    fontSize: 16,
+    fontWeight: "600",
   },
   transcriptText: {
     fontSize: 16,
     lineHeight: 24,
   },
+  transcriptPlaceholder: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 30,
+    gap: 12,
+  },
+  transcriptPlaceholderText: {
+    fontSize: 14,
+    textAlign: "center",
+  },
+  loadingOverlay: {
+    marginTop: 20,
+    alignItems: "center",
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 15,
+    fontWeight: "500",
+  },
   announcementsContainer: {
     flex: 1,
+  },
+  statusCard: {
+    marginHorizontal: 20,
+    marginTop: 20,
+    marginBottom: 16,
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  statusCardContent: {
+    marginBottom: 12,
   },
   statusBar: {
     flexDirection: "row",
@@ -740,6 +1300,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
   },
   liveDot: {
     width: 10,
@@ -747,35 +1310,87 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     backgroundColor: "#22C55E",
   },
-  liveText: {
-    fontSize: 14,
-    fontWeight: "500",
+  leaveButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
   },
   disconnectLink: {
     fontSize: 14,
-    fontWeight: "500",
+    fontWeight: "600",
   },
   speakToggle: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    marginBottom: 16,
+    justifyContent: "space-between",
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    borderWidth: 1.5,
+  },
+  speakToggleLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    flex: 1,
   },
   speakToggleText: {
-    fontSize: 14,
+    fontSize: 15,
+    fontWeight: "500",
+  },
+  toggleSwitch: {
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    minWidth: 45,
+    alignItems: "center",
+  },
+  toggleSwitchText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "700",
   },
   announcementsList: {
     flex: 1,
   },
+  announcementsListContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
+  announcementsHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(128, 128, 128, 0.15)",
+  },
+  announcementsHeaderText: {
+    fontSize: 16,
+    fontWeight: "700",
+  },
   emptyState: {
     alignItems: "center",
     justifyContent: "center",
-    paddingTop: 60,
+    paddingTop: 80,
+    paddingHorizontal: 40,
+  },
+  emptyIconCircle: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 20,
   },
   emptyText: {
     fontSize: 18,
-    fontWeight: "500",
-    marginTop: 16,
+    fontWeight: "600",
+    marginBottom: 8,
   },
   emptySubtext: {
     fontSize: 14,
@@ -805,12 +1420,17 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     paddingHorizontal: 8,
     borderRadius: 6,
+    borderWidth: 1,
     gap: 4,
   },
   priorityBadgeText: {
-    color: "#fff",
     fontSize: 11,
-    fontWeight: "600",
+    fontWeight: "700",
+  },
+  timeContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
   },
   timeText: {
     fontSize: 13,
@@ -818,5 +1438,103 @@ const styles = StyleSheet.create({
   announcementText: {
     fontSize: 16,
     lineHeight: 24,
+  },
+  announcementFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(128, 128, 128, 0.1)",
+  },
+  announcerInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  announcerName: {
+    fontSize: 13,
+    fontWeight: "500",
+  },
+  announcementsListSection: {
+    marginTop: 24,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(128, 128, 128, 0.2)",
+    paddingTop: 16,
+  },
+  announcementsListHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  announcementsHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  toggleButton: {
+    padding: 4,
+  },
+  emptyAnnouncementsList: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 40,
+    gap: 12,
+  },
+  emptyAnnouncementsText: {
+    fontSize: 15,
+    textAlign: "center",
+  },
+  announcementItem: {
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 12,
+    borderLeftWidth: 4,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  announcementItemHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  priorityBadgeSmall: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+    gap: 4,
+  },
+  priorityBadgeSmallText: {
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  deleteButton: {
+    padding: 4,
+  },
+  announcementItemText: {
+    fontSize: 15,
+    lineHeight: 22,
+    marginBottom: 10,
+  },
+  announcementItemFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  announcementItemMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  metaText: {
+    fontSize: 12,
   },
 });

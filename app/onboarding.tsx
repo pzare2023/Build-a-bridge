@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Text, TextInput, Pressable, Alert } from "react-native";
+import { Text, TextInput, Pressable, Alert, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import { useTheme } from "../context/ThemeContext";
@@ -24,40 +24,51 @@ export default function Onboarding() {
   };
 
   return (
-<View style={{ flex: 1, padding: 24, justifyContent: "center", gap: 12, backgroundColor: colors.background }}>
-<Text style={{ fontSize: 24, fontWeight: "600", color: colors.text }}>Welcome 👋</Text>
-<Text style={{ fontSize: 16, color: colors.textMuted }}>What should we call you?</Text>
-
-
-      <TextInput
-        value={name}
-        onChangeText={setName}
-        placeholder="Your name"
-        autoCapitalize="words"
-        style={{
-          borderWidth: 1,
-          borderColor: "#ccc",
-          padding: 12,
-          borderRadius: 10,
-          fontSize: 16,
-          color: "white",
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: colors.background }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
+      <ScrollView
+        contentContainerStyle={{
+          flexGrow: 1,
+          padding: 24,
+          justifyContent: "center",
+          gap: 12
         }}
-      />
+        keyboardShouldPersistTaps="handled"
+      >
+        <Text style={{ fontSize: 24, fontWeight: "600", color: colors.text }}>Welcome 👋</Text>
+        <Text style={{ fontSize: 16, color: colors.textMuted }}>What should we call you?</Text>
 
-<Pressable
-  onPress={save}
-  style={{
-    padding: 14,
-    borderRadius: 10,
-    alignItems: "center",
-    backgroundColor: colors.primary,
-  }}
->
-  <Text style={{ color: colors.textInverse, fontSize: 16, fontWeight: "600" }}>
-    Continue
-  </Text>
-</Pressable>
+        <TextInput
+          value={name}
+          onChangeText={setName}
+          placeholder="Your name"
+          autoCapitalize="words"
+          style={{
+            borderWidth: 1,
+            borderColor: "#ccc",
+            padding: 12,
+            borderRadius: 10,
+            fontSize: 16,
+            color: "white",
+          }}
+        />
 
-    </View>
+        <Pressable
+          onPress={save}
+          style={{
+            padding: 14,
+            borderRadius: 10,
+            alignItems: "center",
+            backgroundColor: colors.primary,
+          }}
+        >
+          <Text style={{ color: colors.textInverse, fontSize: 16, fontWeight: "600" }}>
+            Continue
+          </Text>
+        </Pressable>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }

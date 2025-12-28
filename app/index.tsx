@@ -13,43 +13,47 @@ export default function Index() {
   const router = useRouter();
   const { setRole } = useUserRole();
   const { colors } = useTheme();
+
+  const [name, setName] = useState<string | null>(null);
+  const [ready, setReady] = useState(false);
+
   const resetOnboarding = async () => {
     await AsyncStorage.multiRemove(["user_name", "has_onboarded"]);
     setReady(false);
     router.replace("/onboarding");
   };
-  
+
   const handleAnnouncer = () => {
     setRole("announcer");
-    router.replace("/home"); // go to menu screen
+    router.replace("/live"); // go directly to live announcements
+  };
+
+  const handleAnnouncerLongPress = () => {
+    router.push("/admin/dashboard"); // long press for admin access
   };
 
   const handlePassenger = () => {
     setRole("passenger");
     router.replace("/home"); // same menu, but Live behaves differently
   };
-  const [name, setName] = useState<string | null>(null);
 
-  const [ready, setReady] = useState(false);
- 
-  
+
   useEffect(() => {
     (async () => {
       const hasOnboarded = await AsyncStorage.getItem("has_onboarded");
       const storedName = await AsyncStorage.getItem("user_name");
-  
+
       if (hasOnboarded !== "true" || !storedName) {
         router.replace("/onboarding");
         return;
       }
-      
-  
+
       setName(storedName);
       setReady(true);
     })();
   }, []);
-  
-if (!ready) return null;
+
+  if (!ready) return null;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -57,20 +61,19 @@ if (!ready) return null;
         Multilingual Transit Companion
       </Text>
 
-          { name && (
-            <View style={styles.greetingContainer}>
-  <Text style={[styles.subtitle, { color: colors.textMuted }]}>
-    Hi, {name}
-  </Text>
+      { name && (
+        <View style={styles.greetingContainer}>
+          <Text style={[styles.subtitle, { color: colors.textMuted }]}>
+            Hi, {name}
+          </Text>
 
-  <Image
-    source={require("../assets/images/logo1.png")}
-    style={styles.avatar}
-    resizeMode="contain"
-  />
-</View>
-
-    )}
+          <Image
+            source={require("../assets/images/logo1.png")}
+            style={styles.avatar}
+            resizeMode="contain"
+          />
+        </View>
+      )}
 
       <Text style={[styles.subtitle, { color: colors.textMuted }]}>
         Choose how you want to use the app
@@ -79,6 +82,7 @@ if (!ready) return null;
       <TouchableOpacity
         style={[styles.primaryButton, { backgroundColor: colors.primary }]}
         onPress={handleAnnouncer}
+        onLongPress={handleAnnouncerLongPress}
       >
         <Text style={[styles.buttonText, { color: colors.textInverse }]}>
           Announcer
@@ -95,25 +99,25 @@ if (!ready) return null;
       </TouchableOpacity>
 
       <TouchableOpacity
-  style={[
-    styles.secondaryButton,
-    {
-      backgroundColor: "transparent",
-      borderWidth: 1,
-      borderColor: colors.textMuted,
-      marginTop: 16,
-    },
-  ]}
-  onPress={resetOnboarding}
->
-  <Text style={[styles.buttonText, { color: colors.textMuted }]}>
-    Reset onboarding (testing)
-  </Text>
-</TouchableOpacity>
+        style={[
+          styles.secondaryButton,
+          {
+            backgroundColor: "transparent",
+            borderWidth: 1,
+            borderColor: colors.textMuted,
+            marginTop: 16,
+          },
+        ]}
+        onPress={resetOnboarding}
+      >
+        <Text style={[styles.buttonText, { color: colors.textMuted }]}>
+          Reset onboarding (testing)
+        </Text>
+      </TouchableOpacity>
 
     </View>
   );
-  
+
 }
 
 const styles = StyleSheet.create({
@@ -168,6 +172,6 @@ const styles = StyleSheet.create({
     height: 150,
     marginTop: 1,
   },
-  
-  
+
+
 });
