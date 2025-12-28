@@ -17,7 +17,7 @@ export default function Home() {
       </Text>
       <View style={styles.buttons}>
         <AppButton title="Ask the Chatbot" onPress={() => router.push("/ask")} />
-        <AppButton title="Updates Dashboard" onPress={() => router.push("/updates")} />
+        <AppButton title="Subway Alerts" onPress={() => router.push("/updates")} />
         <AppButton title="Live Announcements" onPress={() => router.push("/live")} />
       </View>
     </View>
