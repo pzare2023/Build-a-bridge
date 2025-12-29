@@ -19,6 +19,7 @@ import {
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { useUserRole } from "../context/UserRoleContext";
+import { useLanguage, SupportedLanguage } from "../context/LanguageContext";
 import {
   Announcement,
   AnnouncementPriority,
@@ -37,6 +38,7 @@ import {
   saveTrainNumber,
 } from "../utils/storage";
 import { getRelativeTime } from "../utils/timeAgo";
+import { translateText } from "../services/translation";
 
 const TRANSCRIBE_URL =
   "https://build-a-bridge-backend.vercel.app/api/transcribe";
@@ -80,8 +82,12 @@ export default function Live() {
   const { role, setRole } = useUserRole();
   const { colors } = useTheme();
   const { isAuthenticated, currentUser, logout } = useAuth();
+  const { language, setLanguage } = useLanguage();
   const router = useRouter();
   const isPassenger = role === "passenger";
+
+  // Language dropdown state
+  const [showLanguageDropdown, setShowLanguageDropdown] = useState(false);
 
   // Auth check for announcers
   useEffect(() => {
@@ -113,6 +119,8 @@ export default function Live() {
 
   // Passenger state
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [translatedAnnouncements, setTranslatedAnnouncements] = useState<Announcement[]>([]);
+  const [isTranslating, setIsTranslating] = useState(false);
   const [autoSpeak, setAutoSpeak] = useState(true);
   const lastAnnouncementRef = useRef<string | null>(null);
   const unsubscribeRef = useRef<(() => void) | null>(null);
@@ -145,22 +153,65 @@ export default function Live() {
     };
   }, []);
 
+  // Translate announcements when language changes
+  useEffect(() => {
+    if (!isPassenger || announcements.length === 0) {
+      setTranslatedAnnouncements(announcements);
+      return;
+    }
+
+    const translateAnnouncements = async () => {
+      if (language === "en") {
+        // No translation needed for English
+        setTranslatedAnnouncements(announcements);
+        return;
+      }
+
+      setIsTranslating(true);
+      try {
+        const translated = await Promise.all(
+          announcements.map(async (announcement) => ({
+            ...announcement,
+            text: await translateText(announcement.text, language),
+          }))
+        );
+        setTranslatedAnnouncements(translated);
+      } catch (error) {
+        console.error("Translation error:", error);
+        // Fallback to original announcements
+        setTranslatedAnnouncements(announcements);
+      } finally {
+        setIsTranslating(false);
+      }
+    };
+
+    translateAnnouncements();
+  }, [announcements, language, isPassenger]);
+
   // Text-to-Speech for new announcements
   useEffect(() => {
-    if (isPassenger && autoSpeak && announcements.length > 0) {
-      const latestAnnouncement = announcements[0];
+    if (isPassenger && autoSpeak && translatedAnnouncements.length > 0) {
+      const latestAnnouncement = translatedAnnouncements[0];
       if (
         latestAnnouncement &&
         latestAnnouncement.text !== lastAnnouncementRef.current
       ) {
         lastAnnouncementRef.current = latestAnnouncement.text;
+
+        // Get language code for speech
+        const speechLang =
+          language === "hi" ? "hi-IN" :
+          language === "fa" ? "fa-IR" :
+          language === "fr" ? "fr-FR" :
+          "en-US";
+
         Speech.speak(latestAnnouncement.text, {
-          language: "en",
+          language: speechLang,
           rate: 0.9,
         });
       }
     }
-  }, [announcements, isPassenger, autoSpeak]);
+  }, [translatedAnnouncements, isPassenger, autoSpeak, language]);
 
   // Connect to train (Passenger)
   const connectToTrain = async () => {
@@ -843,6 +894,75 @@ export default function Live() {
                 </Text>
               </View>
             </TouchableOpacity>
+
+            {/* Language Selector Dropdown */}
+            <View style={styles.languageSelector}>
+              <View style={styles.languageSelectorHeader}>
+                <Ionicons name="language" size={20} color={colors.textMuted} />
+                <Text style={[styles.languageSelectorLabel, { color: colors.textMuted }]}>
+                  Language
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                style={[
+                  styles.languageDropdownButton,
+                  {
+                    backgroundColor: colors.inputField,
+                    borderColor: showLanguageDropdown ? colors.primary : colors.border,
+                  }
+                ]}
+                onPress={() => setShowLanguageDropdown(!showLanguageDropdown)}
+              >
+                <Text style={[styles.languageDropdownText, { color: colors.text }]}>
+                  {language === "en" ? "English" :
+                   language === "hi" ? "हिन्दी (Hindi)" :
+                   language === "fa" ? "فارسی (Farsi)" :
+                   "Français (French)"}
+                </Text>
+                <Ionicons
+                  name={showLanguageDropdown ? "chevron-up" : "chevron-down"}
+                  size={20}
+                  color={colors.textMuted}
+                />
+              </TouchableOpacity>
+
+              {showLanguageDropdown && (
+                <View style={[styles.languageDropdownMenu, {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.border,
+                }]}>
+                  {(["en", "hi", "fa", "fr"] as const).map((lang) => (
+                    <TouchableOpacity
+                      key={lang}
+                      style={[
+                        styles.languageDropdownItem,
+                        language === lang && { backgroundColor: colors.primary + "10" },
+                      ]}
+                      onPress={() => {
+                        setLanguage(lang);
+                        setShowLanguageDropdown(false);
+                      }}
+                    >
+                      <Text
+                        style={[
+                          styles.languageDropdownItemText,
+                          { color: language === lang ? colors.primary : colors.text }
+                        ]}
+                      >
+                        {lang === "en" ? "English" :
+                         lang === "hi" ? "हिन्दी (Hindi)" :
+                         lang === "fa" ? "فارسی (Farsi)" :
+                         "Français (French)"}
+                      </Text>
+                      {language === lang && (
+                        <Ionicons name="checkmark" size={20} color={colors.primary} />
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
           </View>
 
           {/* Announcements List */}
@@ -851,7 +971,7 @@ export default function Live() {
             contentContainerStyle={styles.announcementsListContent}
             showsVerticalScrollIndicator={true}
           >
-            {announcements.length === 0 ? (
+            {translatedAnnouncements.length === 0 ? (
               <View style={styles.emptyState}>
                 <View style={[styles.emptyIconCircle, { backgroundColor: colors.surface }]}>
                   <Ionicons
@@ -874,10 +994,13 @@ export default function Live() {
                 <View style={styles.announcementsHeader}>
                   <Ionicons name="megaphone" size={18} color={colors.primary} />
                   <Text style={[styles.announcementsHeaderText, { color: colors.text }]}>
-                    Recent Announcements ({announcements.length})
+                    Recent Announcements ({translatedAnnouncements.length})
                   </Text>
+                  {isTranslating && (
+                    <ActivityIndicator size="small" color={colors.primary} style={{ marginLeft: 8 }} />
+                  )}
                 </View>
-                {announcements.map((announcement, index) => {
+                {translatedAnnouncements.map((announcement, index) => {
                   const priorityConfig = getPriorityConfig(announcement.priority);
                   return (
                     <View
@@ -1536,5 +1659,58 @@ const styles = StyleSheet.create({
   },
   metaText: {
     fontSize: 12,
+  },
+  languageSelector: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(128, 128, 128, 0.2)",
+  },
+  languageSelectorHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 12,
+  },
+  languageSelectorLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  languageDropdownButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  languageDropdownText: {
+    fontSize: 15,
+    fontWeight: "500",
+  },
+  languageDropdownMenu: {
+    marginTop: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  languageDropdownItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(128, 128, 128, 0.1)",
+  },
+  languageDropdownItemText: {
+    fontSize: 15,
+    fontWeight: "500",
   },
 });

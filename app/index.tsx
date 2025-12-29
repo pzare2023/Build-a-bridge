@@ -12,7 +12,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 export default function Index() {
   const router = useRouter();
   const { setRole } = useUserRole();
-  const { colors } = useTheme();
+  const { colors, mode, toggleTheme } = useTheme();
 
   const [name, setName] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
@@ -57,6 +57,19 @@ export default function Index() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <TouchableOpacity
+        style={[styles.themeToggle, {
+          backgroundColor: colors.surface,
+          borderWidth: 1,
+          borderColor: colors.border,
+        }]}
+        onPress={toggleTheme}
+      >
+        <Text style={[styles.themeToggleText, { color: colors.text }]}>
+          {mode === "dark" ? "Light" : "Dark"}
+        </Text>
+      </TouchableOpacity>
+
       <Text style={[styles.title, { color: colors.text }]}>
         Multilingual Transit Companion
       </Text>
@@ -126,6 +139,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     justifyContent: "center",
     alignItems: "stretch",
+  },
+  themeToggle: {
+    position: "absolute",
+    top: 60,
+    right: 24,
+    zIndex: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+  },
+  themeToggleText: {
+    fontSize: 14,
+    fontWeight: "600",
   },
   title: {
     fontSize: 26,

@@ -44,14 +44,16 @@ export default function Onboarding() {
           value={name}
           onChangeText={setName}
           placeholder="Your name"
+          placeholderTextColor={colors.inputPlaceholder}
           autoCapitalize="words"
           style={{
             borderWidth: 1,
-            borderColor: "#ccc",
+            borderColor: colors.border,
+            backgroundColor: colors.inputField,
             padding: 12,
             borderRadius: 10,
             fontSize: 16,
-            color: "white",
+            color: colors.inputText,
           }}
         />
 

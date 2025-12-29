@@ -7,6 +7,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider } from "../context/AuthContext";
 import { ThemeProvider } from "../context/ThemeContext";
 import { UserRoleProvider } from "../context/UserRoleContext";
+import { LanguageProvider } from "../context/LanguageContext";
 import {
   initializeNotifications,
   onForegroundMessage,
@@ -81,11 +82,13 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <StatusBar style="auto" />
       <ThemeProvider>
-        <AuthProvider>
-          <UserRoleProvider>
-            <StackNavigator />
-          </UserRoleProvider>
-        </AuthProvider>
+        <LanguageProvider>
+          <AuthProvider>
+            <UserRoleProvider>
+              <StackNavigator />
+            </UserRoleProvider>
+          </AuthProvider>
+        </LanguageProvider>
       </ThemeProvider>
     </SafeAreaProvider>
   );

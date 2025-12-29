@@ -1,6 +1,7 @@
 // context/ThemeContext.tsx
-import React, { createContext, useContext, useMemo } from "react";
+import React, { createContext, useContext, useMemo, useState, useEffect } from "react";
 import { useColorScheme } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // Define color palette for light and dark modes
 const colors = {
@@ -101,19 +102,49 @@ interface ThemeContextType {
   mode: ThemeMode;
   colors: ThemeColors;
   isDark: boolean;
+  toggleTheme: () => void;
+  setThemeMode: (mode: ThemeMode) => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const colorScheme = useColorScheme();
-  const mode: ThemeMode = colorScheme === "dark" ? "dark" : "light";
+  const systemColorScheme = useColorScheme();
+  const [themeMode, setThemeMode] = useState<ThemeMode | null>(null);
+
+  // Load saved theme preference on mount
+  useEffect(() => {
+    (async () => {
+      const savedTheme = await AsyncStorage.getItem("theme_mode");
+      if (savedTheme === "light" || savedTheme === "dark") {
+        setThemeMode(savedTheme);
+      } else {
+        // Use system preference if no saved theme
+        setThemeMode(systemColorScheme === "dark" ? "dark" : "light");
+      }
+    })();
+  }, [systemColorScheme]);
+
+  const mode: ThemeMode = themeMode || (systemColorScheme === "dark" ? "dark" : "light");
+
+  const toggleTheme = async () => {
+    const newMode: ThemeMode = mode === "dark" ? "light" : "dark";
+    setThemeMode(newMode);
+    await AsyncStorage.setItem("theme_mode", newMode);
+  };
+
+  const setThemeModeHandler = async (newMode: ThemeMode) => {
+    setThemeMode(newMode);
+    await AsyncStorage.setItem("theme_mode", newMode);
+  };
 
   const value = useMemo(
     () => ({
       mode,
       colors: colors[mode],
       isDark: mode === "dark",
+      toggleTheme,
+      setThemeMode: setThemeModeHandler,
     }),
     [mode]
   );
