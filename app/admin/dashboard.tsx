@@ -13,11 +13,17 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { DEMO_ACCOUNTS } from "../../constants/demoAccounts";
+import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
-import { db } from "../../firebase/config";
+import { db, type AnnouncerDocument } from "../../firebase/config";
 import type { Announcement } from "../../services/announcements";
 import { deleteAnnouncement as deleteAnnouncementService } from "../../services/announcements";
+import {
+  getAllAnnouncers,
+  createAnnouncer,
+  updateAnnouncerStatus,
+  deleteAnnouncer,
+} from "../../services/announcerAuth";
 
 interface TrainWithAnnouncements {
   trainNumber: string;
@@ -28,6 +34,7 @@ type TabType = "announcements" | "users" | "stats";
 
 export default function AdminDashboard() {
   const router = useRouter();
+  const { logout } = useAuth();
   const { colors } = useTheme();
   const [activeTab, setActiveTab] = useState<TabType>("announcements");
   const [allAnnouncements, setAllAnnouncements] = useState<
@@ -35,10 +42,26 @@ export default function AdminDashboard() {
   >([]);
   const [loading, setLoading] = useState(true);
   const [filterPriority, setFilterPriority] = useState<string | null>(null);
+  const [announcers, setAnnouncers] = useState<AnnouncerDocument[]>([]);
+  const [loadingAnnouncers, setLoadingAnnouncers] = useState(false);
 
   useEffect(() => {
     loadAllAnnouncements();
+    loadAnnouncers();
   }, []);
+
+  const loadAnnouncers = async () => {
+    setLoadingAnnouncers(true);
+    try {
+      const allAnnouncers = await getAllAnnouncers();
+      setAnnouncers(allAnnouncers);
+    } catch (error) {
+      console.error("Error loading announcers:", error);
+      Alert.alert("Error", "Failed to load announcers");
+    } finally {
+      setLoadingAnnouncers(false);
+    }
+  };
 
   const loadAllAnnouncements = async () => {
     setLoading(true);
@@ -86,6 +109,74 @@ export default function AdminDashboard() {
             } catch (error) {
               console.error("Error deleting announcement:", error);
               Alert.alert("Error", "Failed to delete announcement");
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleAddAnnouncer = () => {
+    Alert.prompt(
+      "Add New Announcer",
+      "Enter email, password, and name separated by commas",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Add",
+          onPress: async (input) => {
+            if (!input) return;
+            const [email, password, name] = input.split(",").map((s) => s.trim());
+
+            if (!email || !password || !name) {
+              Alert.alert("Error", "Please provide email, password, and name");
+              return;
+            }
+
+            const result = await createAnnouncer(email, password, name);
+            if (result) {
+              await loadAnnouncers();
+              Alert.alert("Success", "Announcer created successfully");
+            } else {
+              Alert.alert("Error", "Failed to create announcer. Email might already exist.");
+            }
+          },
+        },
+      ],
+      "plain-text",
+      "",
+      "default"
+    );
+  };
+
+  const handleToggleAnnouncerStatus = async (announcer: AnnouncerDocument) => {
+    const newStatus = !announcer.isActive;
+    const success = await updateAnnouncerStatus(announcer.id, newStatus);
+
+    if (success) {
+      await loadAnnouncers();
+      Alert.alert("Success", `Announcer ${newStatus ? "activated" : "deactivated"}`);
+    } else {
+      Alert.alert("Error", "Failed to update announcer status");
+    }
+  };
+
+  const handleDeleteAnnouncer = async (announcer: AnnouncerDocument) => {
+    Alert.alert(
+      "Delete Announcer",
+      `Are you sure you want to delete ${announcer.name}?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            const success = await deleteAnnouncer(announcer.id);
+            if (success) {
+              await loadAnnouncers();
+              Alert.alert("Success", "Announcer deleted");
+            } else {
+              Alert.alert("Error", "Failed to delete announcer");
             }
           },
         },
@@ -371,10 +462,6 @@ export default function AdminDashboard() {
   };
 
   const renderUsersTab = () => {
-    const announcerAccounts = DEMO_ACCOUNTS.filter(
-      (acc) => acc.role === "announcer"
-    );
-
     // Count announcements per driver
     const driverCounts: { [key: string]: number } = {};
     allAnnouncements.forEach((train) => {
@@ -386,43 +473,126 @@ export default function AdminDashboard() {
 
     return (
       <ScrollView style={styles.tabContent} contentContainerStyle={styles.scrollContent}>
-        <View style={styles.sectionHeader}>
-          <Ionicons name="people" size={24} color={colors.primary} />
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            Announcer Accounts ({announcerAccounts.length})
-          </Text>
-        </View>
-        {announcerAccounts.map((account, index) => (
-          <View
-            key={account.id}
-            style={[styles.userCard, { backgroundColor: colors.card }]}
+        <View style={styles.sectionHeaderWithButton}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="people" size={24} color={colors.primary} />
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>
+              Announcer Accounts ({announcers.length})
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={[styles.addButton, { backgroundColor: colors.primary }]}
+            onPress={handleAddAnnouncer}
           >
-            <View style={styles.userCardHeader}>
-              <View style={[styles.userAvatar, { backgroundColor: colors.primary + "20" }]}>
-                <Text style={[styles.userAvatarText, { color: colors.primary }]}>
-                  {account.name.charAt(0)}
-                </Text>
-              </View>
-              <View style={styles.userInfo}>
-                <Text style={[styles.userName, { color: colors.text }]}>
-                  {account.name}
-                </Text>
-                <View style={styles.userEmailRow}>
-                  <Ionicons name="mail-outline" size={14} color={colors.textMuted} />
-                  <Text style={[styles.userEmail, { color: colors.textMuted }]}>
-                    {account.email}
+            <Ionicons name="add" size={20} color="#fff" />
+            <Text style={styles.addButtonText}>Add</Text>
+          </TouchableOpacity>
+        </View>
+
+        {loadingAnnouncers ? (
+          <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 20 }} />
+        ) : announcers.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Ionicons name="people-outline" size={64} color={colors.textMuted} />
+            <Text style={[styles.emptyText, { color: colors.textMuted }]}>
+              No announcers found
+            </Text>
+            <Text style={[styles.emptySubtext, { color: colors.textMuted }]}>
+              Add announcers to manage login accounts
+            </Text>
+          </View>
+        ) : (
+          announcers.map((announcer) => (
+            <View
+              key={announcer.id}
+              style={[
+                styles.userCard,
+                {
+                  backgroundColor: colors.card,
+                  opacity: announcer.isActive ? 1 : 0.6,
+                },
+              ]}
+            >
+              <View style={styles.userCardHeader}>
+                <View style={[styles.userAvatar, { backgroundColor: colors.primary + "20" }]}>
+                  <Text style={[styles.userAvatarText, { color: colors.primary }]}>
+                    {announcer.name.charAt(0).toUpperCase()}
                   </Text>
                 </View>
+                <View style={styles.userInfo}>
+                  <View style={styles.userNameRow}>
+                    <Text style={[styles.userName, { color: colors.text }]}>
+                      {announcer.name}
+                    </Text>
+                    {announcer.role === "admin" && (
+                      <View style={[styles.adminBadge, { backgroundColor: "#f59e0b" }]}>
+                        <Text style={styles.adminBadgeText}>ADMIN</Text>
+                      </View>
+                    )}
+                    {!announcer.isActive && (
+                      <View style={[styles.inactiveBadge, { backgroundColor: "#ef4444" }]}>
+                        <Text style={styles.inactiveBadgeText}>INACTIVE</Text>
+                      </View>
+                    )}
+                  </View>
+                  <View style={styles.userEmailRow}>
+                    <Ionicons name="mail-outline" size={14} color={colors.textMuted} />
+                    <Text style={[styles.userEmail, { color: colors.textMuted }]}>
+                      {announcer.email}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              <View style={[styles.userStatsContainer, { backgroundColor: colors.background }]}>
+                <Ionicons name="megaphone" size={16} color={colors.primary} />
+                <Text style={[styles.userStats, { color: colors.text }]}>
+                  {driverCounts[announcer.name] || 0} announcements
+                </Text>
+              </View>
+
+              <View style={styles.userActionsContainer}>
+                <TouchableOpacity
+                  style={[
+                    styles.actionButton,
+                    {
+                      backgroundColor: announcer.isActive
+                        ? colors.border
+                        : colors.primary,
+                    },
+                  ]}
+                  onPress={() => handleToggleAnnouncerStatus(announcer)}
+                >
+                  <Ionicons
+                    name={announcer.isActive ? "pause" : "play"}
+                    size={16}
+                    color={announcer.isActive ? colors.text : "#fff"}
+                  />
+                  <Text
+                    style={[
+                      styles.actionButtonText,
+                      {
+                        color: announcer.isActive ? colors.text : "#fff",
+                      },
+                    ]}
+                  >
+                    {announcer.isActive ? "Deactivate" : "Activate"}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.actionButton, { backgroundColor: "#ef444420" }]}
+                  onPress={() => handleDeleteAnnouncer(announcer)}
+                >
+                  <Ionicons name="trash-outline" size={16} color="#ef4444" />
+                  <Text style={[styles.actionButtonText, { color: "#ef4444" }]}>
+                    Delete
+                  </Text>
+                </TouchableOpacity>
               </View>
             </View>
-            <View style={[styles.userStatsContainer, { backgroundColor: colors.background }]}>
-              <Ionicons name="megaphone" size={16} color={colors.primary} />
-              <Text style={[styles.userStats, { color: colors.text }]}>
-                {driverCounts[account.name] || 0} announcements
-              </Text>
-            </View>
-          </View>
-        ))}
+          ))
+        )}
       </ScrollView>
     );
   };
@@ -518,10 +688,13 @@ export default function AdminDashboard() {
             </View>
           </View>
           <TouchableOpacity
-            onPress={() => router.back()}
+            onPress={async () => {
+              await logout();
+              router.replace("/");
+            }}
             style={styles.backButton}
           >
-            <Ionicons name="arrow-back" size={24} color="#fff" />
+            <Ionicons name="log-out-outline" size={24} color="#fff" />
           </TouchableOpacity>
         </View>
       </View>
@@ -962,5 +1135,69 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 16,
     marginTop: 8,
+  },
+  sectionHeaderWithButton: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  addButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  addButtonText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  userNameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    flexWrap: "wrap",
+  },
+  adminBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  adminBadgeText: {
+    color: "#fff",
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  inactiveBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  inactiveBadgeText: {
+    color: "#fff",
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  userActionsContainer: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 12,
+  },
+  actionButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
+  actionButtonText: {
+    fontSize: 13,
+    fontWeight: "600",
   },
 });

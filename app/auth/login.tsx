@@ -38,11 +38,18 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const success = await login(email.trim(), password);
+      const user = await login(email.trim(), password);
 
-      if (success) {
+      if (user) {
+        // Set role based on user's actual role from database
         setRole("announcer");
-        router.replace("/live");
+
+        // Redirect based on role
+        if (user.role === "admin") {
+          router.replace("/admin/dashboard");
+        } else {
+          router.replace("/live");
+        }
       } else {
         setError("Invalid email or password");
       }

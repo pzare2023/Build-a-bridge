@@ -36,7 +36,6 @@ setLogLevel("debug");
 // Fixes: "Failed to get document because the client is offline"
 export const db: Firestore = initializeFirestore(app, {
   experimentalForceLongPolling: true,
-  useFetchStreams: false,
 });
 
 // ----------------- TYPES -----------------
@@ -55,6 +54,17 @@ export interface TrainDocument {
   updatedAt: any; // serverTimestamp()
 }
 
+export interface AnnouncerDocument {
+  id: string;
+  email: string;
+  passwordHash: string; // Hashed with bcrypt
+  name: string;
+  role: "announcer" | "admin";
+  createdAt: number;
+  lastLogin?: number;
+  isActive: boolean;
+}
+
 // ----------------- REFERENCES -----------------
 
 export const trainsCollection = collection(
@@ -64,3 +74,11 @@ export const trainsCollection = collection(
 
 export const getTrainDoc = (trainNumber: string) =>
   doc(trainsCollection, trainNumber) as DocumentReference<TrainDocument>;
+
+export const announcersCollection = collection(
+  db,
+  "announcers"
+) as CollectionReference<AnnouncerDocument>;
+
+export const getAnnouncerDoc = (announcerId: string) =>
+  doc(announcersCollection, announcerId) as DocumentReference<AnnouncerDocument>;

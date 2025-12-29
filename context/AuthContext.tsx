@@ -1,6 +1,7 @@
 import React, { createContext, useState, useContext, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { validateCredentials, DemoAccount } from "../constants/demoAccounts";
+import { validateAnnouncerCredentials } from "../services/announcerAuth";
+import type { AnnouncerDocument } from "../firebase/config";
 
 interface AuthUser {
   id: string;
@@ -13,7 +14,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   currentUser: AuthUser | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<boolean>;
+  login: (email: string, password: string) => Promise<AuthUser | null>;
   logout: () => Promise<void>;
 }
 
@@ -46,30 +47,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
-  const login = async (email: string, password: string): Promise<boolean> => {
-    const account = validateCredentials(email, password);
+  const login = async (email: string, password: string): Promise<AuthUser | null> => {
+    try {
+      // Validate against Firestore database
+      const announcer = await validateAnnouncerCredentials(email, password);
 
-    if (account) {
-      const user: AuthUser = {
-        id: account.id,
-        email: account.email,
-        name: account.name,
-        role: account.role,
-      };
+      if (announcer) {
+        const user: AuthUser = {
+          id: announcer.id,
+          email: announcer.email,
+          name: announcer.name,
+          role: announcer.role,
+        };
 
-      setCurrentUser(user);
+        setCurrentUser(user);
 
-      // Persist to AsyncStorage
-      try {
-        await AsyncStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
-      } catch (error) {
-        console.error("Error saving user to storage:", error);
+        // Persist to AsyncStorage
+        try {
+          await AsyncStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
+        } catch (error) {
+          console.error("Error saving user to storage:", error);
+        }
+
+        return user;
       }
 
-      return true;
+      return null;
+    } catch (error) {
+      console.error("Login error in AuthContext:", error);
+      return null;
     }
-
-    return false;
   };
 
   const logout = async () => {
