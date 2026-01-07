@@ -15,14 +15,24 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
 
    npm install gtfs-realtime-bindings @protobufjs/aspromise
    ```
+2. Server Startup
 
-2. Start the app
+   ```bash
+   Create a .env file with the variable EXPO_PUBLIC_API_URL
+
+   cd server
+   npm run start
+
+   Set EXPO_PUBLIC_API_URL to the link of the server
+   ```
+
+3. Start the app
 
    ```bash
    npx expo start --tunnel
    ```
 
-3. install groq package 
+4. install groq package 
 
 npm install cors express dotenv
 
