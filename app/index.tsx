@@ -94,6 +94,9 @@ export default function Index() {
       )}
 
       <Text style={[styles.subtitle, { color: colors.textMuted }]}>
+        Greetings from the developers!
+      </Text>
+      <Text style={[styles.subtitle, { color: colors.textMuted }]}>
         Choose how you want to use the app
       </Text>
 
@@ -116,22 +119,7 @@ export default function Index() {
         </Text>
       </TouchableOpacity>
 
-      <TouchableOpacity
-        style={[
-          styles.secondaryButton,
-          {
-            backgroundColor: "transparent",
-            borderWidth: 1,
-            borderColor: colors.textMuted,
-            marginTop: 16,
-          },
-        ]}
-        onPress={resetOnboarding}
-      >
-        <Text style={[styles.buttonText, { color: colors.textMuted }]}>
-          Reset onboarding (testing)
-        </Text>
-      </TouchableOpacity>
+      
 
     </View>
   );
