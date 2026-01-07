@@ -5,9 +5,9 @@ import { useEffect } from "react";
 import { Alert, useColorScheme } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider } from "../context/AuthContext";
+import { LanguageProvider } from "../context/LanguageContext";
 import { ThemeProvider } from "../context/ThemeContext";
 import { UserRoleProvider } from "../context/UserRoleContext";
-import { LanguageProvider } from "../context/LanguageContext";
 import {
   initializeNotifications,
   onForegroundMessage,
@@ -55,6 +55,10 @@ function StackNavigator() {
       <Stack.Screen
         name="updates"
         options={{ title: "TTC Alerts" }}
+      />
+      <Stack.Screen
+        name="report"
+        options={{ title: "Report" }}
       />
     </Stack>
   );

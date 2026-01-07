@@ -1,4 +1,5 @@
 // app/home.tsx  -> MAIN APP HOME
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { Pressable, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useAuth } from "../context/AuthContext";
@@ -22,6 +23,16 @@ export default function Home() {
       accessible
       accessibilityLabel="Home screen"
     >
+      {/* Report Button - Top Right */}
+      <TouchableOpacity
+        style={[styles.reportButton, { backgroundColor: colors.primary }]}
+        onPress={() => router.push("/report")}
+        accessibilityLabel="Report an issue"
+      >
+        <Ionicons name="alert-circle-outline" size={20} color="#fff" />
+        <Text style={styles.reportButtonText}>Report</Text>
+      </TouchableOpacity>
+
       {isAuthenticated && (
         <View style={styles.userInfo}>
           <Text style={[styles.welcomeText, { color: colors.text }]}>
@@ -45,6 +56,13 @@ export default function Home() {
         {isAuthenticated && currentUser?.role === "admin" && (
           <AppButton title="Admin Dashboard" onPress={() => router.push("/admin/dashboard")} />
         )}
+      </View>
+
+      {/* Safety Quote - Bottom */}
+      <View style={styles.quoteContainer}>
+        <Text style={[styles.quoteText, { color: colors.textMuted }]}>
+          "If you see something, say something." - TTC
+        </Text>
       </View>
     </View>
   );
@@ -81,6 +99,23 @@ const styles = StyleSheet.create({
     padding: 24,
     alignItems: "center",
     justifyContent: "center",
+  },
+  reportButton: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    gap: 6,
+    zIndex: 10,
+  },
+  reportButtonText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
   },
   userInfo: {
     position: "absolute",
@@ -125,5 +160,16 @@ const styles = StyleSheet.create({
     color: "white",
     fontSize: 16,
     fontWeight: "600",
+  },
+  quoteContainer: {
+    position: "absolute",
+    bottom: 40,
+    paddingHorizontal: 24,
+    alignItems: "center",
+  },
+  quoteText: {
+    fontSize: 14,
+    fontStyle: "italic",
+    textAlign: "center",
   },
 });

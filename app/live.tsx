@@ -17,9 +17,9 @@ import {
   View,
 } from "react-native";
 import { useAuth } from "../context/AuthContext";
+import { useLanguage } from "../context/LanguageContext";
 import { useTheme } from "../context/ThemeContext";
 import { useUserRole } from "../context/UserRoleContext";
-import { useLanguage, SupportedLanguage } from "../context/LanguageContext";
 import {
   Announcement,
   AnnouncementPriority,
@@ -31,6 +31,7 @@ import {
   subscribeToTrain,
   unsubscribeFromTrain,
 } from "../services/notifications";
+import { translateText } from "../services/translation";
 import {
   getDriverName,
   getTrainNumber,
@@ -38,7 +39,6 @@ import {
   saveTrainNumber,
 } from "../utils/storage";
 import { getRelativeTime } from "../utils/timeAgo";
-import { translateText } from "../services/translation";
 
 const TRANSCRIBE_URL =
   "https://build-a-bridge-backend.vercel.app/api/transcribe";
@@ -201,9 +201,9 @@ export default function Live() {
         // Get language code for speech
         const speechLang =
           language === "hi" ? "hi-IN" :
-          language === "fa" ? "fa-IR" :
-          language === "fr" ? "fr-FR" :
-          "en-US";
+            language === "fa" ? "fa-IR" :
+              language === "fr" ? "fr-FR" :
+                "en-US";
 
         Speech.speak(latestAnnouncement.text, {
           language: speechLang,
@@ -788,7 +788,7 @@ export default function Live() {
                   Join Your Train
                 </Text>
                 <Text style={[styles.setupSubtitle, { color: colors.textMuted }]}>
-                  Enter your train number to receive live announcements
+                  Enter your train/line number to receive live announcements
                 </Text>
               </View>
 
@@ -796,7 +796,7 @@ export default function Live() {
                 <View style={styles.inputWrapper}>
                   <Ionicons name="train" size={20} color={colors.primary} />
                   <View style={styles.inputContent}>
-                    <Text style={[styles.label, { color: colors.text }]}>Train Number</Text>
+                    <Text style={[styles.label, { color: colors.text }]}>Train/Line Number</Text>
                     <TextInput
                       ref={trainNumberInputRef}
                       style={[
@@ -827,7 +827,7 @@ export default function Live() {
                 disabled={!trainNumber.trim()}
               >
                 <Ionicons name="enter-outline" size={24} color="#fff" />
-                <Text style={styles.connectButtonText}>Connect to Train</Text>
+                <Text style={styles.connectButtonText}>Connect</Text>
               </TouchableOpacity>
             </View>
           </ScrollView>
@@ -842,7 +842,7 @@ export default function Live() {
                 <View style={[styles.liveIndicator, { backgroundColor: "rgba(34, 197, 94, 0.15)" }]}>
                   <View style={styles.liveDot} />
                   <Text style={[styles.liveText, { color: colors.text }]}>
-                    Train {trainNumber}
+                    Live
                   </Text>
                 </View>
               </View>
@@ -916,9 +916,9 @@ export default function Live() {
               >
                 <Text style={[styles.languageDropdownText, { color: colors.text }]}>
                   {language === "en" ? "English" :
-                   language === "hi" ? "हिन्दी (Hindi)" :
-                   language === "fa" ? "فارسی (Farsi)" :
-                   "Français (French)"}
+                    language === "hi" ? "हिन्दी (Hindi)" :
+                      language === "fa" ? "فارسی (Farsi)" :
+                        "Français (French)"}
                 </Text>
                 <Ionicons
                   name={showLanguageDropdown ? "chevron-up" : "chevron-down"}
@@ -951,9 +951,9 @@ export default function Live() {
                         ]}
                       >
                         {lang === "en" ? "English" :
-                         lang === "hi" ? "हिन्दी (Hindi)" :
-                         lang === "fa" ? "فارسی (Farsi)" :
-                         "Français (French)"}
+                          lang === "hi" ? "हिन्दी (Hindi)" :
+                            lang === "fa" ? "فارسی (Farsi)" :
+                              "Français (French)"}
                       </Text>
                       {language === lang && (
                         <Ionicons name="checkmark" size={20} color={colors.primary} />

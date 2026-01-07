@@ -1,0 +1,33 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Trains collection - for announcements
+    match /trains/{trainId} {
+      // Anyone can read train announcements (passengers viewing announcements)
+      allow read: if true;
+
+      // Anyone can write announcements (announcers posting)
+      // Note: You're using custom auth via Firestore, not Firebase Auth
+      // so we allow writes and validate credentials in your app logic
+      allow write: if true;
+    }
+
+    // Announcers collection - for login credentials
+    match /announcers/{announcerId} {
+      // Allow read access for authentication purposes
+      // Your app validates credentials by reading this collection
+      allow read: if true;
+
+      // Allow write access for announcer management
+      // Your app logic in createAnnouncer, updateAnnouncerStatus, etc.
+      // handles the actual operations
+      allow write: if true;
+    }
+
+    // Default: Deny all other collections
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

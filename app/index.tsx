@@ -1,11 +1,13 @@
 // app/index.tsx  -> FIRST PAGE (Announcer / Passenger)
 
-import { View, Text, TouchableOpacity, StyleSheet, Image } from "react-native";
-import { useRouter } from "expo-router";
-import { useUserRole } from "../context/UserRoleContext";
-import { useTheme } from "../context/ThemeContext";
-import { useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useRouter } from "expo-router";
+import { useEffect, useState } from "react";
+import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { useAuth } from "../context/AuthContext";
+import { useTheme } from "../context/ThemeContext";
+import { useUserRole } from "../context/UserRoleContext";
+
 
 
 
@@ -13,6 +15,7 @@ export default function Index() {
   const router = useRouter();
   const { setRole } = useUserRole();
   const { colors, mode, toggleTheme } = useTheme();
+  const { logout } = useAuth();
 
   const [name, setName] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
@@ -32,7 +35,9 @@ export default function Index() {
     router.push("/admin/dashboard"); // long press for admin access
   };
 
-  const handlePassenger = () => {
+  const handlePassenger = async () => {
+    // Clear authentication state when switching to passenger mode
+    await logout();
     setRole("passenger");
     router.replace("/home"); // same menu, but Live behaves differently
   };
@@ -74,7 +79,7 @@ export default function Index() {
         Multilingual Transit Companion
       </Text>
 
-      { name && (
+      {name && (
         <View style={styles.greetingContainer}>
           <Text style={[styles.subtitle, { color: colors.textMuted }]}>
             Hi, {name}
