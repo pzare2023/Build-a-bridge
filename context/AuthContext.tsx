@@ -1,13 +1,14 @@
-import React, { createContext, useState, useContext, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import React, { createContext, useContext, useEffect, useState } from "react";
+import type { TTCLine } from "../constants/ttcLines";
 import { validateAnnouncerCredentials } from "../services/announcerAuth";
-import type { AnnouncerDocument } from "../firebase/config";
 
 interface AuthUser {
   id: string;
   email: string;
   name: string;
   role: "announcer" | "admin";
+  assignedLines?: TTCLine[];
 }
 
 interface AuthContextType {
@@ -58,6 +59,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           email: announcer.email,
           name: announcer.name,
           role: announcer.role,
+          assignedLines: announcer.assignedLines,
         };
 
         setCurrentUser(user);

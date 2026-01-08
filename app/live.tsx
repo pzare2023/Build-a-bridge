@@ -106,6 +106,7 @@ export default function Live() {
 
   // Common state
   const [trainNumber, setTrainNumber] = useState("");
+  const [lineNumber, setLineNumber] = useState(""); // For passenger line filtering
   const [isConnected, setIsConnected] = useState(false);
 
   // Driver state
@@ -215,32 +216,70 @@ export default function Live() {
 
   // Connect to train (Passenger)
   const connectToTrain = async () => {
-    if (!trainNumber.trim()) return;
+    // Validate that at least one field is filled
+    const hasLine = lineNumber.trim();
+    const hasTrain = trainNumber.trim();
 
-    await saveTrainNumber(trainNumber.trim());
-    await subscribeToTrain(trainNumber.trim());
+    if (!hasLine && !hasTrain) return;
 
-    // Subscribe to real-time updates
+    // Save the values
+    if (hasTrain) {
+      await saveTrainNumber(trainNumber.trim());
+      await subscribeToTrain(trainNumber.trim());
+    }
+
+    // Unsubscribe from previous subscription if exists
     if (unsubscribeRef.current) {
       unsubscribeRef.current();
     }
 
-    unsubscribeRef.current = subscribeToAnnouncements(
-      trainNumber.trim(),
-      (newAnnouncements) => {
-        // Filter announcements to only show those less than 1 hour old
-        const now = Date.now();
-        const oneHourAgo = now - (60 * 60 * 1000);
-        const filteredAnnouncements = newAnnouncements.filter(
-          (announcement) => announcement.createdAt >= oneHourAgo
-        );
-        setAnnouncements(filteredAnnouncements);
-      },
-      (error) => {
-        console.error("Subscription error:", error);
-        setIsConnected(false);
-      }
-    );
+    // Subscribe based on what was entered
+    if (hasLine && hasTrain) {
+      // Both line and train: show combined announcements from last hour
+      const { subscribeToCombinedAnnouncements } = await import("../services/announcements");
+      unsubscribeRef.current = await subscribeToCombinedAnnouncements(
+        lineNumber.trim() as any, // TTCLine
+        trainNumber.trim(),
+        (newAnnouncements) => {
+          setAnnouncements(newAnnouncements);
+        },
+        (error) => {
+          console.error("Subscription error:", error);
+          setIsConnected(false);
+        }
+      );
+    } else if (hasLine) {
+      // Line only: show line-specific announcements from last hour
+      const { subscribeToLineAnnouncements } = await import("../services/announcements");
+      unsubscribeRef.current = await subscribeToLineAnnouncements(
+        lineNumber.trim() as any, // TTCLine
+        (newAnnouncements) => {
+          setAnnouncements(newAnnouncements);
+        },
+        (error) => {
+          console.error("Subscription error:", error);
+          setIsConnected(false);
+        }
+      );
+    } else {
+      // Train only: show train-specific announcements from last hour
+      unsubscribeRef.current = subscribeToAnnouncements(
+        trainNumber.trim(),
+        (newAnnouncements) => {
+          // Filter announcements to only show those less than 1 hour old
+          const now = Date.now();
+          const oneHourAgo = now - (60 * 60 * 1000);
+          const filteredAnnouncements = newAnnouncements.filter(
+            (announcement) => announcement.createdAt >= oneHourAgo
+          );
+          setAnnouncements(filteredAnnouncements);
+        },
+        (error) => {
+          console.error("Subscription error:", error);
+          setIsConnected(false);
+        }
+      );
+    }
 
     setIsConnected(true);
   };
@@ -793,10 +832,34 @@ export default function Live() {
               </View>
 
               <View style={styles.formGroup}>
+                {/* Line Number Input */}
+                <View style={styles.inputWrapper}>
+                  <Ionicons name="subway" size={20} color={colors.primary} />
+                  <View style={styles.inputContent}>
+                    <Text style={[styles.label, { color: colors.text }]}>Line Number (Optional)</Text>
+                    <TextInput
+                      style={[
+                        styles.input,
+                        {
+                          backgroundColor: colors.inputField,
+                          color: colors.inputText,
+                          borderColor: colors.border,
+                        },
+                      ]}
+                      value={lineNumber}
+                      onChangeText={setLineNumber}
+                      placeholder="e.g., 1, 2, 4, 5, or 6"
+                      placeholderTextColor={colors.textMuted}
+                      keyboardType="number-pad"
+                    />
+                  </View>
+                </View>
+
+                {/* Train Number Input */}
                 <View style={styles.inputWrapper}>
                   <Ionicons name="train" size={20} color={colors.primary} />
                   <View style={styles.inputContent}>
-                    <Text style={[styles.label, { color: colors.text }]}>Train/Line Number</Text>
+                    <Text style={[styles.label, { color: colors.text }]}>Train Number (Optional)</Text>
                     <TextInput
                       ref={trainNumberInputRef}
                       style={[
@@ -815,16 +878,20 @@ export default function Live() {
                     />
                   </View>
                 </View>
+
+                <Text style={[styles.inputHint, { color: colors.textMuted }]}>
+                  Enter at least one: line number, train number, or both
+                </Text>
               </View>
 
               <TouchableOpacity
                 style={[
                   styles.connectButton,
                   { backgroundColor: colors.primary },
-                  !trainNumber.trim() && styles.buttonDisabled,
+                  (!trainNumber.trim() && !lineNumber.trim()) && styles.buttonDisabled,
                 ]}
                 onPress={connectToTrain}
-                disabled={!trainNumber.trim()}
+                disabled={!trainNumber.trim() && !lineNumber.trim()}
               >
                 <Ionicons name="enter-outline" size={24} color="#fff" />
                 <Text style={styles.connectButtonText}>Connect</Text>
@@ -1197,6 +1264,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 14,
     fontSize: 16,
+  },
+  inputHint: {
+    fontSize: 13,
+    fontStyle: "italic",
+    marginTop: 8,
   },
   connectButton: {
     flexDirection: "row",

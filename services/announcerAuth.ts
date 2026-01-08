@@ -3,14 +3,14 @@ import "react-native-get-random-values";
 
 import bcrypt from "bcryptjs";
 import {
-  getDocs,
-  query,
-  where,
-  updateDoc,
   addDoc,
   deleteDoc,
-  serverTimestamp,
+  getDocs,
+  query,
+  updateDoc,
+  where
 } from "firebase/firestore";
+import type { TTCLine } from "../constants/ttcLines";
 import {
   announcersCollection,
   getAnnouncerDoc,
@@ -92,7 +92,8 @@ export async function createAnnouncer(
   email: string,
   password: string,
   name: string,
-  role: "announcer" | "admin" = "announcer"
+  role: "announcer" | "admin" = "announcer",
+  assignedLines?: TTCLine[]
 ): Promise<AnnouncerDocument | null> {
   try {
     // Check if email already exists
@@ -115,6 +116,7 @@ export async function createAnnouncer(
       role,
       createdAt: Date.now(),
       isActive: true,
+      ...(assignedLines && assignedLines.length > 0 && { assignedLines }),
     };
 
     const docRef = await addDoc(announcersCollection, announcerData as any);
@@ -190,6 +192,23 @@ export async function updateAnnouncerPassword(
     return true;
   } catch (error) {
     console.error("Error updating announcer password:", error);
+    return false;
+  }
+}
+
+/**
+ * Update announcer assigned lines
+ */
+export async function updateAnnouncerLines(
+  announcerId: string,
+  assignedLines: string[]
+): Promise<boolean> {
+  try {
+    const docRef = getAnnouncerDoc(announcerId);
+    await updateDoc(docRef, { assignedLines });
+    return true;
+  } catch (error) {
+    console.error("Error updating announcer lines:", error);
     return false;
   }
 }

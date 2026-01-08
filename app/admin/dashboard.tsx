@@ -6,23 +6,27 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Modal,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
-  View,
+  View
 } from "react-native";
+import { getTTCLineColor, type TTCLine } from "../../constants/ttcLines";
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
 import { db, type AnnouncerDocument } from "../../firebase/config";
 import type { Announcement } from "../../services/announcements";
 import { deleteAnnouncement as deleteAnnouncementService } from "../../services/announcements";
 import {
-  getAllAnnouncers,
   createAnnouncer,
-  updateAnnouncerStatus,
   deleteAnnouncer,
+  getAllAnnouncers,
+  updateAnnouncerLines,
+  updateAnnouncerStatus,
 } from "../../services/announcerAuth";
 
 interface TrainWithAnnouncements {
@@ -42,8 +46,19 @@ export default function AdminDashboard() {
   >([]);
   const [loading, setLoading] = useState(true);
   const [filterPriority, setFilterPriority] = useState<string | null>(null);
+  const [filterLine, setFilterLine] = useState<TTCLine | null>(null);
   const [announcers, setAnnouncers] = useState<AnnouncerDocument[]>([]);
   const [loadingAnnouncers, setLoadingAnnouncers] = useState(false);
+  const [showLineModal, setShowLineModal] = useState(false);
+  const [selectedAnnouncerForLines, setSelectedAnnouncerForLines] = useState<AnnouncerDocument | null>(null);
+  const [tempSelectedLines, setTempSelectedLines] = useState<TTCLine[]>([]);
+
+  // Add announcer modal state
+  const [showAddAnnouncerModal, setShowAddAnnouncerModal] = useState(false);
+  const [newAnnouncerEmail, setNewAnnouncerEmail] = useState("");
+  const [newAnnouncerPassword, setNewAnnouncerPassword] = useState("");
+  const [newAnnouncerName, setNewAnnouncerName] = useState("");
+  const [newAnnouncerLines, setNewAnnouncerLines] = useState<TTCLine[]>([]);
 
   useEffect(() => {
     loadAllAnnouncements();
@@ -117,35 +132,74 @@ export default function AdminDashboard() {
   };
 
   const handleAddAnnouncer = () => {
-    Alert.prompt(
-      "Add New Announcer",
-      "Enter email, password, and name separated by commas",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Add",
-          onPress: async (input) => {
-            if (!input) return;
-            const [email, password, name] = input.split(",").map((s) => s.trim());
+    setShowAddAnnouncerModal(true);
+  };
 
-            if (!email || !password || !name) {
-              Alert.alert("Error", "Please provide email, password, and name");
-              return;
-            }
+  const handleCreateAnnouncer = async () => {
+    // Validate inputs
+    if (!newAnnouncerEmail.trim() || !newAnnouncerPassword.trim() || !newAnnouncerName.trim()) {
+      Alert.alert("Error", "Please fill in email, password, and name");
+      return;
+    }
 
-            const result = await createAnnouncer(email, password, name);
-            if (result) {
-              await loadAnnouncers();
-              Alert.alert("Success", "Announcer created successfully");
-            } else {
-              Alert.alert("Error", "Failed to create announcer. Email might already exist.");
-            }
-          },
-        },
-      ],
-      "plain-text",
-      "",
-      "default"
+    const result = await createAnnouncer(
+      newAnnouncerEmail.trim(),
+      newAnnouncerPassword.trim(),
+      newAnnouncerName.trim(),
+      "announcer",
+      newAnnouncerLines.length > 0 ? newAnnouncerLines : undefined
+    );
+
+    if (result) {
+      await loadAnnouncers();
+      // Clear form
+      setNewAnnouncerEmail("");
+      setNewAnnouncerPassword("");
+      setNewAnnouncerName("");
+      setNewAnnouncerLines([]);
+      setShowAddAnnouncerModal(false);
+      Alert.alert(
+        "Success",
+        `Announcer created${newAnnouncerLines.length > 0 ? ` with lines: ${newAnnouncerLines.join(", ")}` : " (train-based)"}`
+      );
+    } else {
+      Alert.alert("Error", "Failed to create announcer. Email might already exist.");
+    }
+  };
+
+  const toggleNewAnnouncerLine = (lineId: TTCLine) => {
+    setNewAnnouncerLines(prev =>
+      prev.includes(lineId)
+        ? prev.filter(l => l !== lineId)
+        : [...prev, lineId]
+    );
+  };
+
+  const handleEditAnnouncerLines = (announcer: AnnouncerDocument) => {
+    setSelectedAnnouncerForLines(announcer);
+    setTempSelectedLines(announcer.assignedLines || []);
+    setShowLineModal(true);
+  };
+
+  const handleSaveAnnouncerLines = async () => {
+    if (!selectedAnnouncerForLines) return;
+
+    const success = await updateAnnouncerLines(selectedAnnouncerForLines.id, tempSelectedLines);
+    if (success) {
+      await loadAnnouncers();
+      setShowLineModal(false);
+      setSelectedAnnouncerForLines(null);
+      Alert.alert("Success", "Lines updated successfully");
+    } else {
+      Alert.alert("Error", "Failed to update lines");
+    }
+  };
+
+  const toggleLineSelection = (lineId: TTCLine) => {
+    setTempSelectedLines(prev =>
+      prev.includes(lineId)
+        ? prev.filter(l => l !== lineId)
+        : [...prev, lineId]
     );
   };
 
@@ -471,6 +525,149 @@ export default function AdminDashboard() {
       });
     });
 
+    // Separate announcers by type
+    const lineSpecificAnnouncers = announcers.filter(
+      (a) => a.assignedLines && a.assignedLines.length > 0
+    );
+    const trainSpecificAnnouncers = announcers.filter(
+      (a) => !a.assignedLines || a.assignedLines.length === 0
+    );
+
+    const renderAnnouncerCard = (announcer: AnnouncerDocument) => (
+      <View
+        key={announcer.id}
+        style={[
+          styles.userCard,
+          {
+            backgroundColor: colors.surface,
+            opacity: announcer.isActive ? 1 : 0.6,
+          },
+        ]}
+      >
+        <View style={styles.userCardHeader}>
+          <View style={[styles.userAvatar, { backgroundColor: colors.primary + "20" }]}>
+            <Text style={[styles.userAvatarText, { color: colors.primary }]}>
+              {announcer.name.charAt(0).toUpperCase()}
+            </Text>
+          </View>
+          <View style={styles.userInfo}>
+            <View style={styles.userNameRow}>
+              <Text style={[styles.userName, { color: colors.text }]}>
+                {announcer.name}
+              </Text>
+              {announcer.role === "admin" && (
+                <View style={[styles.adminBadge, { backgroundColor: "#f59e0b" }]}>
+                  <Text style={styles.adminBadgeText}>ADMIN</Text>
+                </View>
+              )}
+              {!announcer.isActive && (
+                <View style={[styles.inactiveBadge, { backgroundColor: "#ef4444" }]}>
+                  <Text style={styles.inactiveBadgeText}>INACTIVE</Text>
+                </View>
+              )}
+            </View>
+            <View style={styles.userEmailRow}>
+              <Ionicons name="mail-outline" size={14} color={colors.textMuted} />
+              <Text style={[styles.userEmail, { color: colors.textMuted }]}>
+                {announcer.email}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={[styles.userStatsContainer, { backgroundColor: colors.background }]}>
+          <Ionicons name="megaphone" size={16} color={colors.primary} />
+          <Text style={[styles.userStats, { color: colors.text }]}>
+            {driverCounts[announcer.name] || 0} announcements
+          </Text>
+        </View>
+
+        {/* Assigned Lines */}
+        {announcer.assignedLines && announcer.assignedLines.length > 0 && (
+          <View style={styles.linesContainer}>
+            <Text style={[styles.linesLabel, { color: colors.textMuted }]}>
+              Assigned Lines:
+            </Text>
+            <View style={styles.linesBadgesContainer}>
+              {announcer.assignedLines.map((lineId) => {
+                const lineColor = getTTCLineColor(lineId);
+                return (
+                  <View
+                    key={lineId}
+                    style={[
+                      styles.lineBadge,
+                      {
+                        backgroundColor: lineColor + "20",
+                        borderColor: lineColor,
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.lineBadgeText, { color: lineColor }]}>
+                      Line {lineId}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+        )}
+
+        <View style={styles.userActionsContainer}>
+          {announcer.role !== "admin" && (
+            <TouchableOpacity
+              style={[
+                styles.actionButton,
+                { backgroundColor: colors.primary + "20" },
+              ]}
+              onPress={() => handleEditAnnouncerLines(announcer)}
+            >
+              <Ionicons name="train" size={16} color={colors.primary} />
+              <Text style={[styles.actionButtonText, { color: colors.primary }]}>
+                Edit Lines
+              </Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity
+            style={[
+              styles.actionButton,
+              {
+                backgroundColor: announcer.isActive
+                  ? colors.border
+                  : colors.primary,
+              },
+            ]}
+            onPress={() => handleToggleAnnouncerStatus(announcer)}
+          >
+            <Ionicons
+              name={announcer.isActive ? "pause" : "play"}
+              size={16}
+              color={announcer.isActive ? colors.text : "#fff"}
+            />
+            <Text
+              style={[
+                styles.actionButtonText,
+                {
+                  color: announcer.isActive ? colors.text : "#fff",
+                },
+              ]}
+            >
+              {announcer.isActive ? "Deactivate" : "Activate"}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.actionButton, { backgroundColor: "#ef444420" }]}
+            onPress={() => handleDeleteAnnouncer(announcer)}
+          >
+            <Ionicons name="trash-outline" size={16} color="#ef4444" />
+            <Text style={[styles.actionButtonText, { color: "#ef4444" }]}>
+              Delete
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+
     return (
       <ScrollView style={styles.tabContent} contentContainerStyle={styles.scrollContent}>
         <View style={styles.sectionHeaderWithButton}>
@@ -502,96 +699,33 @@ export default function AdminDashboard() {
             </Text>
           </View>
         ) : (
-          announcers.map((announcer) => (
-            <View
-              key={announcer.id}
-              style={[
-                styles.userCard,
-                {
-                  backgroundColor: colors.card,
-                  opacity: announcer.isActive ? 1 : 0.6,
-                },
-              ]}
-            >
-              <View style={styles.userCardHeader}>
-                <View style={[styles.userAvatar, { backgroundColor: colors.primary + "20" }]}>
-                  <Text style={[styles.userAvatarText, { color: colors.primary }]}>
-                    {announcer.name.charAt(0).toUpperCase()}
+          <>
+            {/* Line-Specific Announcers Section */}
+            {lineSpecificAnnouncers.length > 0 && (
+              <>
+                <View style={styles.sectionHeader}>
+                  <Ionicons name="subway" size={20} color={colors.primary} />
+                  <Text style={[styles.sectionTitle, { color: colors.text, fontSize: 16 }]}>
+                    Line-Specific Announcers ({lineSpecificAnnouncers.length})
                   </Text>
                 </View>
-                <View style={styles.userInfo}>
-                  <View style={styles.userNameRow}>
-                    <Text style={[styles.userName, { color: colors.text }]}>
-                      {announcer.name}
-                    </Text>
-                    {announcer.role === "admin" && (
-                      <View style={[styles.adminBadge, { backgroundColor: "#f59e0b" }]}>
-                        <Text style={styles.adminBadgeText}>ADMIN</Text>
-                      </View>
-                    )}
-                    {!announcer.isActive && (
-                      <View style={[styles.inactiveBadge, { backgroundColor: "#ef4444" }]}>
-                        <Text style={styles.inactiveBadgeText}>INACTIVE</Text>
-                      </View>
-                    )}
-                  </View>
-                  <View style={styles.userEmailRow}>
-                    <Ionicons name="mail-outline" size={14} color={colors.textMuted} />
-                    <Text style={[styles.userEmail, { color: colors.textMuted }]}>
-                      {announcer.email}
-                    </Text>
-                  </View>
+                {lineSpecificAnnouncers.map(renderAnnouncerCard)}
+              </>
+            )}
+
+            {/* Train-Specific Announcers Section */}
+            {trainSpecificAnnouncers.length > 0 && (
+              <>
+                <View style={[styles.sectionHeader, { marginTop: lineSpecificAnnouncers.length > 0 ? 24 : 0 }]}>
+                  <Ionicons name="train" size={20} color={colors.primary} />
+                  <Text style={[styles.sectionTitle, { color: colors.text, fontSize: 16 }]}>
+                    Train-Specific Announcers ({trainSpecificAnnouncers.length})
+                  </Text>
                 </View>
-              </View>
-
-              <View style={[styles.userStatsContainer, { backgroundColor: colors.background }]}>
-                <Ionicons name="megaphone" size={16} color={colors.primary} />
-                <Text style={[styles.userStats, { color: colors.text }]}>
-                  {driverCounts[announcer.name] || 0} announcements
-                </Text>
-              </View>
-
-              <View style={styles.userActionsContainer}>
-                <TouchableOpacity
-                  style={[
-                    styles.actionButton,
-                    {
-                      backgroundColor: announcer.isActive
-                        ? colors.border
-                        : colors.primary,
-                    },
-                  ]}
-                  onPress={() => handleToggleAnnouncerStatus(announcer)}
-                >
-                  <Ionicons
-                    name={announcer.isActive ? "pause" : "play"}
-                    size={16}
-                    color={announcer.isActive ? colors.text : "#fff"}
-                  />
-                  <Text
-                    style={[
-                      styles.actionButtonText,
-                      {
-                        color: announcer.isActive ? colors.text : "#fff",
-                      },
-                    ]}
-                  >
-                    {announcer.isActive ? "Deactivate" : "Activate"}
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.actionButton, { backgroundColor: "#ef444420" }]}
-                  onPress={() => handleDeleteAnnouncer(announcer)}
-                >
-                  <Ionicons name="trash-outline" size={16} color="#ef4444" />
-                  <Text style={[styles.actionButtonText, { color: "#ef4444" }]}>
-                    Delete
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ))
+                {trainSpecificAnnouncers.map(renderAnnouncerCard)}
+              </>
+            )}
+          </>
         )}
       </ScrollView>
     );
@@ -792,6 +926,210 @@ export default function AdminDashboard() {
           {activeTab === "stats" && renderStatsTab()}
         </>
       )}
+
+      {/* Add Announcer Modal */}
+      <Modal
+        visible={showAddAnnouncerModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowAddAnnouncerModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+            {/* Decorative Header with Background */}
+            <View style={[styles.modalHeader, { backgroundColor: colors.primary }]}>
+              <View style={styles.modalHeaderContent}>
+                <View style={styles.modalIconContainer}>
+                  <Ionicons name="person-add" size={28} color="#fff" />
+                </View>
+                <View style={styles.modalHeaderTextContainer}>
+                  <Text style={styles.modalTitle}>Add New Announcer</Text>
+                  <Text style={styles.modalSubtitle}>Create a new announcer account</Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowAddAnnouncerModal(false)}
+                style={styles.modalCloseButton}
+              >
+                <Ionicons name="close" size={24} color="#fff" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalBody}>
+              {/* Name Field */}
+              <View style={styles.inputRow}>
+                <Text style={[styles.inputLabel, { color: colors.text }]}>Name</Text>
+                <TextInput
+                  style={[styles.input, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
+                  placeholder="Enter announcer name"
+                  placeholderTextColor={colors.textMuted}
+                  value={newAnnouncerName}
+                  onChangeText={setNewAnnouncerName}
+                />
+              </View>
+
+              {/* Email Field */}
+              <View style={styles.inputRow}>
+                <Text style={[styles.inputLabel, { color: colors.text }]}>Email</Text>
+                <TextInput
+                  style={[styles.input, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
+                  placeholder="Enter email address"
+                  placeholderTextColor={colors.textMuted}
+                  value={newAnnouncerEmail}
+                  onChangeText={setNewAnnouncerEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+              </View>
+
+              {/* Password Field */}
+              <View style={styles.inputRow}>
+                <Text style={[styles.inputLabel, { color: colors.text }]}>Password</Text>
+                <TextInput
+                  style={[styles.input, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
+                  placeholder="Enter password"
+                  placeholderTextColor={colors.textMuted}
+                  value={newAnnouncerPassword}
+                  onChangeText={setNewAnnouncerPassword}
+                  secureTextEntry
+                />
+              </View>
+
+              {/* Line Assignment Section */}
+              <View style={styles.inputRow}>
+                <Text style={[styles.inputLabel, { color: colors.text }]}>Assigned Lines (Optional)</Text>
+                <Text style={[styles.inputHint, { color: colors.textMuted }]}>
+                  Leave empty for train-specific announcer
+                </Text>
+                <View style={styles.linesSelectionContainer}>
+                  {(['1', '2', '4', '5', '6'] as TTCLine[]).map((lineId) => {
+                    const isSelected = newAnnouncerLines.includes(lineId);
+                    const lineColor = getTTCLineColor(lineId);
+                    return (
+                      <TouchableOpacity
+                        key={lineId}
+                        style={[
+                          styles.lineSelectionButton,
+                          {
+                            backgroundColor: isSelected ? lineColor + '20' : colors.background,
+                            borderColor: isSelected ? lineColor : colors.border,
+                          },
+                        ]}
+                        onPress={() => toggleNewAnnouncerLine(lineId)}
+                      >
+                        <Text style={[styles.lineSelectionText, { color: isSelected ? lineColor : colors.text }]}>
+                          Line {lineId}
+                        </Text>
+                        {isSelected && <Ionicons name="checkmark-circle" size={20} color={lineColor} />}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton, { backgroundColor: colors.border }]}
+                onPress={() => {
+                  setShowAddAnnouncerModal(false);
+                  setNewAnnouncerEmail('');
+                  setNewAnnouncerPassword('');
+                  setNewAnnouncerName('');
+                  setNewAnnouncerLines([]);
+                }}
+              >
+                <Text style={[styles.modalButtonText, { color: colors.text }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.createButton, { backgroundColor: colors.primary }]}
+                onPress={handleCreateAnnouncer}
+              >
+                <Text style={[styles.modalButtonText, { color: '#fff' }]}>Create Announcer</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Edit Lines Modal */}
+      <Modal
+        visible={showLineModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowLineModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+            {/* Decorative Header with Background */}
+            <View style={[styles.modalHeader, { backgroundColor: colors.primary }]}>
+              <View style={styles.modalHeaderContent}>
+                <View style={styles.modalIconContainer}>
+                  <Ionicons name="train" size={28} color="#fff" />
+                </View>
+                <View style={styles.modalHeaderTextContainer}>
+                  <Text style={styles.modalTitle}>Edit Lines</Text>
+                  <Text style={styles.modalSubtitle}>{selectedAnnouncerForLines?.name}</Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowLineModal(false)}
+                style={styles.modalCloseButton}
+              >
+                <Ionicons name="close" size={24} color="#fff" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalBody}>
+              <Text style={[styles.inputHint, { color: colors.textMuted, marginBottom: 16 }]}>
+                Select lines for this announcer. Leave empty for train-specific announcements.
+              </Text>
+              <View style={styles.linesSelectionContainer}>
+                {(['1', '2', '4', '5', '6'] as TTCLine[]).map((lineId) => {
+                  const isSelected = tempSelectedLines.includes(lineId);
+                  const lineColor = getTTCLineColor(lineId);
+                  return (
+                    <TouchableOpacity
+                      key={lineId}
+                      style={[
+                        styles.lineSelectionButton,
+                        {
+                          backgroundColor: isSelected ? lineColor + '20' : colors.background,
+                          borderColor: isSelected ? lineColor : colors.border,
+                        },
+                      ]}
+                      onPress={() => toggleLineSelection(lineId)}
+                    >
+                      <Text style={[styles.lineSelectionText, { color: isSelected ? lineColor : colors.text }]}>
+                        Line {lineId}
+                      </Text>
+                      {isSelected && <Ionicons name="checkmark-circle" size={20} color={lineColor} />}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton, { backgroundColor: colors.border }]}
+                onPress={() => {
+                  setShowLineModal(false);
+                  setSelectedAnnouncerForLines(null);
+                }}
+              >
+                <Text style={[styles.modalButtonText, { color: colors.text }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.createButton, { backgroundColor: colors.primary }]}
+                onPress={handleSaveAnnouncerLines}
+              >
+                <Text style={[styles.modalButtonText, { color: '#fff' }]}>Save Changes</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1200,4 +1538,160 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
   },
+  linesContainer: {
+    marginTop: 12,
+  },
+  linesLabel: {
+    fontSize: 13,
+    marginBottom: 8,
+  },
+  linesBadgesContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  lineBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  lineBadgeText: {
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.65)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  modalContent: {
+    width: "100%",
+    maxWidth: 500,
+    maxHeight: "85%",
+    borderRadius: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 10,
+    overflow: "hidden",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 24,
+    paddingTop: 28,
+    paddingBottom: 28,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+  },
+  modalHeaderContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    flex: 1,
+  },
+  modalIconContainer: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  modalHeaderTextContainer: {
+    flex: 1,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#fff",
+    letterSpacing: 0.3,
+  },
+  modalSubtitle: {
+    fontSize: 13,
+    color: "rgba(255, 255, 255, 0.85)",
+    marginTop: 2,
+  },
+  modalCloseButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(255, 255, 255, 0.15)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalBody: {
+    padding: 20,
+    maxHeight: 400,
+  },
+  modalFooter: {
+    flexDirection: "row",
+    gap: 12,
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: "#e5e7eb",
+  },
+  inputRow: {
+    marginBottom: 20,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    marginBottom: 8,
+  },
+  inputHint: {
+    fontSize: 12,
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  input: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 15,
+  },
+  linesSelectionContainer: {
+    gap: 10,
+    marginTop: 8,
+  },
+  lineSelectionButton: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 14,
+    borderRadius: 10,
+    borderWidth: 2,
+  },
+  lineSelectionText: {
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cancelButton: {
+    // Additional styles can be added here
+  },
+  createButton: {
+    // Additional styles can be added here
+  },
+  modalButtonText: {
+    fontSize: 15,
+    fontWeight: "600",
+  },
 });
+

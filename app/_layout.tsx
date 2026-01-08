@@ -42,6 +42,9 @@ function StackNavigator() {
       {/* admin screens */}
       <Stack.Screen name="admin/dashboard" options={{ title: "Admin Dashboard", headerShown: false }} />
 
+      {/* announcer screens */}
+      <Stack.Screen name="announcer/dashboard" options={{ title: "Announcer Dashboard", headerShown: false }} />
+
       {/* main app screens */}
       <Stack.Screen name="home" options={{ title: "Home" }} />
       <Stack.Screen name="ask" options={{ title: "Ask Chatbot" }} />

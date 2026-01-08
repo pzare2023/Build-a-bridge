@@ -9,6 +9,7 @@ import {
   type DocumentReference,
   type Firestore,
 } from "firebase/firestore";
+import type { TTCLine } from "../constants/ttcLines";
 
 /**
  * Firebase config
@@ -47,6 +48,9 @@ export interface Announcement {
   priority: AnnouncementPriority;
   driverName: string;
   createdAt: number;
+  lineNumber?: TTCLine; // TTC Line number for line-specific announcements
+  announcerId?: string;
+  announcerEmail?: string;
 }
 
 export interface TrainDocument {
@@ -63,6 +67,7 @@ export interface AnnouncerDocument {
   createdAt: number;
   lastLogin?: number;
   isActive: boolean;
+  assignedLines?: TTCLine[]; // TTC lines assigned to this announcer
 }
 
 // ----------------- REFERENCES -----------------

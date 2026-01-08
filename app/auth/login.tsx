@@ -1,20 +1,19 @@
-import React, { useState } from "react";
+import { useRouter } from "expo-router";
+import { useState } from "react";
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  Alert,
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from "react-native";
-import { useRouter } from "expo-router";
 import { useAuth } from "../../context/AuthContext";
-import { useUserRole } from "../../context/UserRoleContext";
 import { useTheme } from "../../context/ThemeContext";
+import { useUserRole } from "../../context/UserRoleContext";
 
 export default function Login() {
   const router = useRouter();
@@ -44,9 +43,18 @@ export default function Login() {
         // Set role based on user's actual role from database
         setRole("announcer");
 
-        // Redirect based on role
+        // Redirect based on role and assigned lines
         if (user.role === "admin") {
           router.replace("/admin/dashboard");
+        } else if (user.role === "announcer") {
+          // Check if announcer has assigned lines
+          if (user.assignedLines && user.assignedLines.length > 0) {
+            // Has assigned lines -> use line-based dashboard
+            router.replace("/announcer/dashboard");
+          } else {
+            // No assigned lines -> use traditional live announcements
+            router.replace("/live");
+          }
         } else {
           router.replace("/live");
         }
