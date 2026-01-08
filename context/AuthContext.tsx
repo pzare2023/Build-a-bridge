@@ -16,6 +16,7 @@ interface AuthContextType {
   currentUser: AuthUser | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<AuthUser | null>;
+  signup: (email: string, password: string, name: string) => Promise<AuthUser | null>;
   logout: () => Promise<void>;
 }
 
@@ -81,6 +82,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
+  const signup = async (email: string, password: string, name: string): Promise<AuthUser | null> => {
+    try {
+      // Import createAnnouncer function
+      const { createAnnouncer } = await import("../services/announcerAuth");
+
+      // Create new announcer account
+      const announcer = await createAnnouncer(email, password, name, "announcer");
+
+      if (announcer) {
+        const user: AuthUser = {
+          id: announcer.id,
+          email: announcer.email,
+          name: announcer.name,
+          role: announcer.role,
+          assignedLines: announcer.assignedLines,
+        };
+
+        setCurrentUser(user);
+
+        // Persist to AsyncStorage
+        try {
+          await AsyncStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
+        } catch (error) {
+          console.error("Error saving user to storage:", error);
+        }
+
+        return user;
+      }
+
+      return null;
+    } catch (error) {
+      console.error("Signup error in AuthContext:", error);
+      return null;
+    }
+  };
+
   const logout = async () => {
     setCurrentUser(null);
     try {
@@ -97,6 +134,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         currentUser,
         loading,
         login,
+        signup,
         logout,
       }}
     >

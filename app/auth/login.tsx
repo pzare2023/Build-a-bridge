@@ -158,7 +158,7 @@ export default function Login() {
             disabled={loading}
           >
             <Text style={[styles.linkText, { color: colors.primary }]}>
-              Don't have an account? View demo accounts
+              Don't have an account? Register
             </Text>
           </TouchableOpacity>
 
