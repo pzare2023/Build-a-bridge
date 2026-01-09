@@ -21,6 +21,7 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
    Create a .env file with the variable EXPO_PUBLIC_API_URL
 
    cd server
+   npm install cors express dotenv
    npm run start
 
    Set EXPO_PUBLIC_API_URL to the link of the server
@@ -33,8 +34,6 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
    ```
 
 4. install groq package 
-
-npm install cors express dotenv
 
 In the output, you'll find options to open the app in a
 
