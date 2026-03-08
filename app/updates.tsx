@@ -23,38 +23,7 @@ interface SubwayAlert {
 function translateTTC(englishText: string): string {
   let text = englishText;
 
-  const dictionary: { [key: string]: string } = {
-    "Line 1 Yonge-University": "Ligne 1 Yonge-University",
-    "Line 2 Bloor-Danforth": "Ligne 2 Bloor-Danforth",
-    "Line 3 Scarborough": "Ligne 3 Scarborough",
-    "Line 4 Sheppard": "Ligne 4 Sheppard",
-    "Subway trains will move slower than usual": "Les trains circuleront plus lentement",
-    "while we work on track issues": "en raison de travaux sur les voies",
-    "due to": "en raison de",
-    "track issues": "problèmes de voie",
-    "signal problems": "problèmes de signalisation",
-    "injury on track": "incident au niveau de la voie",
-    "security incident": "incident de sécurité",
-    "southbound": "vers le sud",
-    "northbound": "vers le nord",
-    "westbound": "vers le ouest",
-    "eastbound": "vers le est",
-    "from": "de",
-    "to": "à",
-    "stations": "les stations",
-    "There is no subway service": "Il n'y a pas de service de métro",
-    "There will be no subway service":"Il n'y aura pas de service de métro",
-    "MAINTENANCE": "MAINTENANCE",
-    "SIGNIFICANT_DELAYS": "RETARDS IMPORTANTS",
-    "MINOR_DELAYS": "RETARDS MINEURS",
-    "NO_SERVICE": "AUCUN SERVICE",
-    "REDUCED_SERVICE": "SERVICE RÉDUIT"
-  };
-
-  Object.keys(dictionary).forEach((key) => {
-    const regex = new RegExp(key, "gi");
-    text = text.replace(regex, dictionary[key]);
-  });
+  
 
   return text;
 }
