@@ -42,6 +42,8 @@ function translateTTC(englishText: string): string {
     "from": "de",
     "to": "à",
     "stations": "les stations",
+    "There is no subway service": "Il n'y a pas de service de métro",
+    "There will be no subway service":"Il n'y aura pas de service de métro",
     "MAINTENANCE": "MAINTENANCE",
     "SIGNIFICANT_DELAYS": "RETARDS IMPORTANTS",
     "MINOR_DELAYS": "RETARDS MINEURS",
@@ -122,9 +124,9 @@ export default function SubwayAlerts() {
     setLoading(true);
     setErrorMsg(null);
     try {
-      const PROXY_URL = "https://corsproxy.io/?";
-      const TARGET_URL = "https://gtfsrt.ttc.ca/alerts/subway?format=text";
-      const res = await fetch(`${PROXY_URL}${TARGET_URL}&_t=${Date.now()}`, {
+      //const PROXY_URL = "https://corsproxy.io/?url=";
+      const TARGET_URL = `https://gtfsrt.ttc.ca/alerts/subway?format=text&_t=${Date.now()}`;
+      const res = await fetch( TARGET_URL, {
         headers: {
           "Cache-Control": "no-cache",
           "Pragma": "no-cache"
